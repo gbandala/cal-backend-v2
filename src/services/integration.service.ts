@@ -91,8 +91,8 @@ export const getUserIntegrationsService = async (userId: string) => {
   const connectedMap = new Map(
     userIntegrations.map((integration) => [integration.app_type, true])
   );
-  
-   // PASO 3: Generar lista completa de todas las integraciones disponibles
+
+  // PASO 3: Generar lista completa de todas las integraciones disponibles
   // Combina apps disponibles (enum) con estado actual (conectado/no conectado)
   const result = Object.values(IntegrationAppTypeEnum).flatMap((appType) => {
     return {
@@ -105,7 +105,7 @@ export const getUserIntegrationsService = async (userId: string) => {
   });
 
   console.log('Resultado de getUserIntegrationsService:', result);
-  
+
   return result;
 };
 
@@ -173,22 +173,26 @@ export const connectAppService = async (
       // CONFIGURACIÓN GOOGLE OAUTH:
       authUrl = googleOAuth2Client.generateAuthUrl({
         access_type: "offline",    // Permite refresh tokens para renovación automática
-        scope: ["https://www.googleapis.com/auth/calendar.events"], // Permisos específicos
+        scope: [
+          'https://www.googleapis.com/auth/calendar',
+          'https://www.googleapis.com/auth/calendar.events'
+        ],
         prompt: "consent",         // Fuerza pantalla de consentimiento (obtiene refresh token)
+        include_granted_scopes: true,
         state,                     // Estado codificado para callback seguro
       });
       break;
-    
+
     // CASOS FUTUROS: Zoom, Microsoft, etc.
     // case IntegrationAppTypeEnum.ZOOM_MEETING:
     //   authUrl = generateZoomAuthUrl(state);
     //   break;
-    
+
     default:
       // Error para tipos no implementados
       throw new BadRequestException("Unsupported app type");
   }
- console.log("Generated OAuth URL:", authUrl);
+  console.log("Generated OAuth URL:", authUrl);
   // PASO 3: Retornar URL para redirección del usuario
   return { url: authUrl };
 };
@@ -218,7 +222,7 @@ export const createIntegrationService = async (data: {
   metadata: any;                         // Datos adicionales del proveedor
 }) => {
   const integrationRepository = AppDataSource.getRepository(Integration);
-  
+
   // VALIDACIÓN: Prevenir integraciones duplicadas
   const existingIntegration = await integrationRepository.findOne({
     where: {
@@ -277,15 +281,15 @@ export const validateGoogleToken = async (
   // expiryDate null = nunca expira (caso especial)
   // Date.now() >= expiryDate = ya expiró
   if (expiryDate === null || Date.now() >= expiryDate) {
-    
+
     // RENOVACIÓN: Usar refresh token para obtener nuevo access token
     googleOAuth2Client.setCredentials({
       refresh_token: refreshToken,
     });
-    
+
     // LLAMADA API: Solicitar nuevos tokens a Google
     const { credentials } = await googleOAuth2Client.refreshAccessToken();
-    
+
     console.log("New access token obtained:", credentials.access_token);
     // RETORNO: Nuevo access token válido
     return credentials.access_token;

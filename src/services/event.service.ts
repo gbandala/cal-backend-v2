@@ -7,6 +7,10 @@ import {
 import { User } from "../database/entities/user.entity";
 import { BadRequestException, NotFoundException } from "../utils/app-error";
 import { slugify } from "../utils/helper";
+import { Meeting } from "../database/entities/meeting.entity";
+import { MeetingStatus } from "../enums/meeting.enum";
+import { cancelMeetingService } from "./meeting.service"; // Importar servicio de cancelación de reuniones
+
 
 /**
  * SERVICIO PRINCIPAL: Crear nuevo evento
@@ -253,6 +257,7 @@ export const getPublicEventByUsernameAndSlugService = async (
  */
 export const deleteEventService = async (userId: string, eventId: string) => {
   const eventRepository = AppDataSource.getRepository(Event);
+  const meetingRepository = AppDataSource.getRepository(Meeting);
 
   // BÚSQUEDA SEGURA: Evento debe existir Y pertenecer al usuario
   const event = await eventRepository.findOne({
@@ -260,6 +265,7 @@ export const deleteEventService = async (userId: string, eventId: string) => {
       id: eventId,           // Evento específico
       user: { id: userId }   // QUE PERTENEZCA al usuario (seguridad crítica)
     },
+    relations: ["meetings"] // 🆕 INCLUIR: relaciones con reuniones
   });
 
   // VALIDACIÓN: Evento debe existir y ser del usuario correcto
@@ -268,10 +274,46 @@ export const deleteEventService = async (userId: string, eventId: string) => {
     throw new NotFoundException("Event not found");
   }
 
-  // ELIMINACIÓN: Remover completamente de BD
-  // TypeORM manejará automáticamente relaciones cascade si están configuradas
+  // 🆕 PASO 1: MANEJAR REUNIONES ASOCIADAS
+  if (event.meetings && event.meetings.length > 0) {
+    console.log(`Found ${event.meetings.length} meetings for event ${eventId}, cancelling them...`);
+    
+    // Cancelar cada reunión individualmente
+    for (const meeting of event.meetings) {
+      try {
+        // Solo cancelar reuniones que estén programadas
+        if (meeting.status === MeetingStatus.SCHEDULED) {
+          await cancelMeetingService(meeting.id);
+          console.log(`Meeting ${meeting.id} cancelled successfully`);
+        }
+      } catch (error) {
+        // Log error pero continuar con otras reuniones
+        if (error instanceof Error) {
+          console.warn(`Failed to cancel meeting ${meeting.id}:`, error.message);
+        } else {
+          console.warn(`Failed to cancel meeting ${meeting.id}:`, error);
+        }
+        
+        // Como fallback, marcar como cancelada en BD
+        meeting.status = MeetingStatus.CANCELLED;
+        await meetingRepository.save(meeting);
+      }
+    }
+    
+    // 🆕 PASO 2: ELIMINAR REUNIONES DE LA BASE DE DATOS
+    // Eliminar físicamente todas las reuniones (ya canceladas)
+    await meetingRepository.remove(event.meetings);
+    console.log(`All meetings for event ${eventId} have been removed`);
+  }
+
+  // 🆕 PASO 3: ELIMINAR EL EVENTO
+  // Ahora que no hay reuniones asociadas, eliminar el evento
   await eventRepository.remove(event);
   console.log("Event deleted:", eventId, "by user:", userId);
+
   // CONFIRMACIÓN: Respuesta de éxito
-  return { success: true };
+  return { 
+    success: true,
+    message: "Event and associated meetings deleted successfully"
+  };
 };

@@ -14,6 +14,7 @@ import eventRoutes from "./routes/event.route";
 import availabilityRoutes from "./routes/availability.route";
 import integrationRoutes from "./routes/integration.route";
 import meetingRoutes from "./routes/meeting.route";
+import calendarRoutes from "./routes/calendar.route"; // ← IMPORTAR ESTA LÍNEA
 
 const app = express();
 const BASE_PATH = config.BASE_PATH;
@@ -42,6 +43,7 @@ app.use(`${BASE_PATH}/event`, eventRoutes);
 app.use(`${BASE_PATH}/availability`, availabilityRoutes);
 app.use(`${BASE_PATH}/integration`, integrationRoutes);
 app.use(`${BASE_PATH}/meeting`, meetingRoutes);
+app.use(`${BASE_PATH}/calendars`, calendarRoutes); // ← AGREGAR ESTA LÍNEA
 app.use(errorHandler);
 
 app.listen(config.PORT, async () => {

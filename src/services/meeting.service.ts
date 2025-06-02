@@ -107,13 +107,18 @@ export const createMeetBookingForGuestService = async (
 
   // PASO 1: VALIDAR QUE EL EVENTO EXISTE Y ES RESERVABLE
   const event = await eventRepository.findOne({
-    where: { id: eventId, isPrivate: false }, // Solo eventos públicos
-    relations: ["user"], // Necesitamos datos del organizador
+    where: { id: eventId, isPrivate: false },
+    relations: ["user"], // Incluir datos del organizador
   });
 
   if (!event) {
     console.log("Event not found:", eventId);
     throw new NotFoundException("Event not found");
+  }
+
+  // 🆕 VALIDAR QUE EL EVENTO TENGA CALENDARIO CONFIGURADO
+  if (!event.calendar_id) {
+    throw new BadRequestException("Event does not have a calendar configured");
   }
 
   // PASO 2: VALIDAR TIPO DE UBICACIÓN/INTEGRACIÓN
@@ -152,20 +157,20 @@ export const createMeetBookingForGuestService = async (
 
     // Crear evento en Google Calendar con Google Meet automático
     const response = await calendar.events.insert({
-      calendarId: "primary", // Calendario principal del organizador
-      conferenceDataVersion: 1, // Habilitar Google Meet
+      calendarId: event.calendar_id, // ← 🎯 CAMBIO: usar calendar específico
+      conferenceDataVersion: 1,
       requestBody: {
-        summary: `${guestName} - ${event.title}`, // Título con nombre del invitado
-        description: additionalInfo, // Información adicional del invitado
-        start: { dateTime: startTime.toISOString() }, // Hora inicio ISO
-        end: { dateTime: endTime.toISOString() }, // Hora fin ISO
+        summary: `${guestName} - ${event.title}`,
+        description: additionalInfo,
+        start: { dateTime: startTime.toISOString() },
+        end: { dateTime: endTime.toISOString() },
         attendees: [
-          { email: guestEmail }, // Invitado
-          { email: event.user.email } // Organizador
+          { email: guestEmail },
+          { email: event.user.email }
         ],
         conferenceData: {
           createRequest: {
-            requestId: `${event.id}-${Date.now()}`, // ID único para Google Meet
+            requestId: `${event.id}-${Date.now()}`,
           },
         },
       },
@@ -221,17 +226,17 @@ export const cancelMeetingService = async (meetingId: string) => {
     where: { id: meetingId },
     relations: ["event", "event.user"], // Necesitamos datos del organizador
   });
-  
+
   if (!meeting) throw new NotFoundException("Meeting not found");
 
   try {
-    // PASO 2: BUSCAR INTEGRACIÓN DE CALENDARIO DEL ORGANIZADOR
+    // PASO 2: BUSCAR INTEGRACIÓN DE CALENDARIO DEL ORGANIZADOR ESPECÍFICO
     const calendarIntegration = await integrationRepository.findOne({
       where: {
-        app_type:
-          IntegrationAppTypeEnum[
-            meeting.calendarAppType as keyof typeof IntegrationAppTypeEnum
-          ],
+        user: { id: meeting.event.user.id }, // ← 🎯 AGREGAR: Filtrar por usuario específico
+        app_type: IntegrationAppTypeEnum[
+          meeting.calendarAppType as keyof typeof IntegrationAppTypeEnum
+        ],
       },
     });
 
@@ -249,8 +254,8 @@ export const cancelMeetingService = async (meetingId: string) => {
       switch (calendarType) {
         case IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR:
           await calendar.events.delete({
-            calendarId: "primary",
-            eventId: meeting.calendarEventId, // ID almacenado al crear
+            calendarId: meeting.event.calendar_id,
+            eventId: meeting.calendarEventId,
           });
           break;
         default:
@@ -258,16 +263,21 @@ export const cancelMeetingService = async (meetingId: string) => {
             `Unsupported calendar provider: ${calendarType}`
           );
       }
+    } else {
+      // ← 🆕 AGREGAR: Log si no se encuentra la integración
+      console.warn(`No calendar integration found for user ${meeting.event.user.id} with app_type ${meeting.calendarAppType}`);
+      // Continuar con la cancelación en BD aunque no se pueda eliminar del calendario
     }
   } catch (error) {
     // Si falla la eliminación del calendario, lanzar error específico
+    console.error("Calendar deletion error:", error);
     throw new BadRequestException("Failed to delete event from calendar");
   }
 
   // PASO 4: MARCAR REUNIÓN COMO CANCELADA EN BASE DE DATOS
   meeting.status = MeetingStatus.CANCELLED;
   await meetingRepository.save(meeting);
-  
+
   return { success: true };
 };
 
@@ -299,21 +309,21 @@ async function getCalendarClient(
         refresh_token,
         expiry_date
       );
-      
+
       // Configurar cliente OAuth2 de Google
       googleOAuth2Client.setCredentials({ access_token: validToken });
-      
+
       // Crear cliente de Google Calendar API
       const calendar = google.calendar({
         version: "v3",
         auth: googleOAuth2Client,
       });
-      
+
       return {
         calendar,
         calendarType: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
       };
-      
+
     default:
       throw new BadRequestException(
         `Unsupported Calendar provider: ${appType}`
