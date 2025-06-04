@@ -11,9 +11,7 @@ build/
 # Environment files
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.production
 
 # ⚠️ IMPORTANTE: NO excluir .env.production 
 # Necesitamos que se suba al repo para el despliegue
@@ -50,7 +48,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-package-lock.json
+
 
 # Docker
 docker-compose.override.yml
