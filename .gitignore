@@ -59,4 +59,4 @@ cal-backend-key.pem
 
 # Compressed files
 *.tar.gz
-*.zip
+*.zip".env.production" 
