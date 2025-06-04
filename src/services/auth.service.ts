@@ -158,6 +158,7 @@ export const loginService = async (loginDto: LoginDto) => {
   // PASO 4: Generar token JWT con payload del usuario
   const { token, expiresAt } = signJwtToken({ userId: user.id });
 
+  console.log("user logged in:", user.omitPassword());
   // PASO 5: Retornar sesión completa
   return {
     user: user.omitPassword(), // Usuario sin contraseña
