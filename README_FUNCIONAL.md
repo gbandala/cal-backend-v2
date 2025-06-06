@@ -51,16 +51,21 @@ Maneja el registro y autenticación de usuarios con configuración automática d
 
 ---
 
-## ⏰ Servicio de Disponibilidad
+## ⏰ Servicio de Disponibilidad (✅ CON SOPORTE TIMEZONE)
 
 ### Descripción
-Gestiona horarios de disponibilidad de usuarios y genera slots de tiempo disponibles para eventos públicos, considerando reuniones existentes.
+Gestiona horarios de disponibilidad de usuarios y genera slots de tiempo disponibles para eventos públicos, considerando reuniones existentes, **✅ con soporte para diferentes zonas horarias y fechas específicas**.
 
 ### Funcionalidades Principales
 
 #### Gestión Personal
-- **Consulta disponibilidad** (`getUserAvailabilityService`): Obtiene configuración actual del usuario
-- **Actualización horarios** (`updateAvailabilityService`): Modifica días y horarios disponibles
+- **Consulta disponibilidad** (`getUserAvailabilityService`): 
+  - Obtiene configuración actual del usuario
+  - **✅ Convierte UTC a zona horaria solicitada para visualización**
+  
+- **Actualización horarios** (`updateAvailabilityService`): 
+  - Modifica días y horarios disponibles
+  - **✅ Convierte input de usuario a UTC para almacenamiento**
 
 #### Disponibilidad Pública
 - **Slots para eventos** (`getAvailabilityForPublicEventService`): Genera horarios reservables considerando:
@@ -68,6 +73,25 @@ Gestiona horarios de disponibilidad de usuarios y genera slots de tiempo disponi
   - Reuniones ya programadas en Google Calendar
   - Duración del evento
   - Intervalos entre citas (timeGap)
+  - **✅ Zona horaria del usuario (visualización ajustada)**
+  - **✅ Fecha específica solicitada (filtrado inteligente)**
+
+### ✅ Mejoras Implementadas
+
+#### Almacenamiento Normalizado
+- **Formato UTC en base de datos**: Todos los horarios ahora se almacenan en UTC
+- **Consistencia de datos**: Comparaciones precisas entre reuniones y disponibilidad
+- **Independencia de zona**: Sistema funcional para usuarios globales
+
+#### Visualización Adaptativa
+- **Parámetro timezone**: Endpoints aceptan zona horaria del usuario
+- **Conversión automática**: Slots mostrados en el horario local del usuario
+- **Validación de formato**: Verificación de zonas horarias IANA válidas
+
+#### Filtrado por Fecha
+- **Parámetro date**: Permite solicitar disponibilidad para un día específico
+- **Optimización de consultas**: Solo procesa el día solicitado
+- **Formato estandarizado**: Usa YYYY-MM-DD para fechas
 
 ### Algoritmos Inteligentes
 

@@ -7,6 +7,8 @@ import { Availability } from "../database/entities/availability.entity";
 import { DayOfWeekEnum } from "../database/entities/day-availability";
 import { Event } from "../database/entities/event.entity";
 import { addDays, addMinutes, format, parseISO } from "date-fns";
+import { toZonedTime, formatInTimeZone } from "date-fns-tz";
+
 
 /**
  * SERVICIO: Obtener disponibilidad de un usuario específico
@@ -20,16 +22,16 @@ import { addDays, addMinutes, format, parseISO } from "date-fns";
  * 3. Formatea los horarios de Date a string HH:mm
  * 4. Retorna estructura normalizada
  */
-export const getUserAvailabilityService = async (userId: string) => {
+export const getUserAvailabilityService = async (userId: string, timezone: string = 'UTC') => {
   // Obtener repositorio de usuarios desde la fuente de datos
   const userRepository = AppDataSource.getRepository(User);
-  
+
   // Buscar usuario con sus relaciones anidadas (availability -> days)
   const user = await userRepository.findOne({
     where: { id: userId },
     relations: ["availability", "availability.days"], // Eager loading de relaciones
   });
-  
+
   // Validación: usuario debe existir y tener disponibilidad configurada
   if (!user || !user.availability) {
     console.log("User not found or availability not set:", userId);
@@ -43,13 +45,23 @@ export const getUserAvailabilityService = async (userId: string) => {
   };
 
   // Procesar cada día de disponibilidad configurado
+  // user.availability.days.forEach((dayAvailability) => {
+  //   availabilityData.days.push({
+  //     day: dayAvailability.day, // Día de la semana (enum)
+  //     // Convertir Date a string formato HH:mm (extrae solo la parte de tiempo)
+  //     startTime: dayAvailability.startTime.toISOString().slice(11, 16),
+  //     endTime: dayAvailability.endTime.toISOString().slice(11, 16),
+  //     isAvailable: dayAvailability.isAvailable, // Booleano si está disponible
+  //   });
+  // });
+  // Procesar cada día de disponibilidad y convertir a zona horaria del usuario
   user.availability.days.forEach((dayAvailability) => {
     availabilityData.days.push({
-      day: dayAvailability.day, // Día de la semana (enum)
-      // Convertir Date a string formato HH:mm (extrae solo la parte de tiempo)
-      startTime: dayAvailability.startTime.toISOString().slice(11, 16),
-      endTime: dayAvailability.endTime.toISOString().slice(11, 16),
-      isAvailable: dayAvailability.isAvailable, // Booleano si está disponible
+      day: dayAvailability.day,
+      // Convertir UTC a zona horaria del usuario para visualización
+      startTime: formatInTimeZone(dayAvailability.startTime, timezone, 'HH:mm'),
+      endTime: formatInTimeZone(dayAvailability.endTime, timezone, 'HH:mm'),
+      isAvailable: dayAvailability.isAvailable,
     });
   });
   console.log("User availability data:", availabilityData);
@@ -72,7 +84,8 @@ export const getUserAvailabilityService = async (userId: string) => {
  */
 export const updateAvailabilityService = async (
   userId: string,
-  data: UpdateAvailabilityDto
+  data: UpdateAvailabilityDto,
+  timezone: string = 'UTC' // Nuevo parámetro opcional
 ) => {
   const userRepository = AppDataSource.getRepository(User);
   const availabilityRepository = AppDataSource.getRepository(Availability);
@@ -87,18 +100,32 @@ export const updateAvailabilityService = async (
   if (!user) {
     console.log("User not found:", userId);
     throw new NotFoundException("User not found");
-  } 
+  }
 
   // Transformar datos de entrada: convertir strings de tiempo a objetos Date
+  // const dayAvailabilityData = data.days.map(
+  //   ({ day, isAvailable, startTime, endTime }) => {
+  //     // Usar fecha base (hoy) para crear objetos Date con solo la hora relevante
+  //     const baseDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  //     return {
+  //       day: day.toUpperCase() as DayOfWeekEnum, // Normalizar a mayúsculas
+  //       // Crear Date objects combinando fecha base + tiempo + zona UTC
+  //       startTime: new Date(`${baseDate}T${startTime}:00Z`),
+  //       endTime: new Date(`${baseDate}T${endTime}:00Z`),
+  //       isAvailable,
+  //     };
+  //   }
+  // );
+
+  // Transformar datos: convertir strings de tiempo a objetos Date en UTC
   const dayAvailabilityData = data.days.map(
     ({ day, isAvailable, startTime, endTime }) => {
-      // Usar fecha base (hoy) para crear objetos Date con solo la hora relevante
-      const baseDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      // Base date es irrelevante para almacenamiento UTC
       return {
-        day: day.toUpperCase() as DayOfWeekEnum, // Normalizar a mayúsculas
-        // Crear Date objects combinando fecha base + tiempo + zona UTC
-        startTime: new Date(`${baseDate}T${startTime}:00Z`),
-        endTime: new Date(`${baseDate}T${endTime}:00Z`),
+        day: day.toUpperCase() as DayOfWeekEnum,
+        // Crear Date objects en UTC directamente
+        startTime: toZonedTime(parseISO(`2000-01-01T${startTime}:00`), timezone),
+        endTime: toZonedTime(parseISO(`2000-01-01T${endTime}:00`), timezone),
         isAvailable,
       };
     }
@@ -135,7 +162,11 @@ export const updateAvailabilityService = async (
  *    c. Genera slots considerando reuniones existentes
  * 4. Retorna estructura con días y slots disponibles
  */
-export const getAvailabilityForPublicEventService = async (eventId: string) => {
+export const getAvailabilityForPublicEventService = async (
+  eventId: string,
+  timezone: string = 'UTC',
+  date?: string
+) => {
   const eventRepository = AppDataSource.getRepository(Event);
 
   // Buscar evento con TODAS las relaciones necesarias para el cálculo
@@ -148,45 +179,74 @@ export const getAvailabilityForPublicEventService = async (eventId: string) => {
       "user.meetings",           // Reuniones ya programadas (para evitar conflictos)
     ],
   });
+  // const scheduledMeetings = Array.from(
+  //   (event?.user.meetings || [])
+  //     .filter(meeting => meeting.status === 'SCHEDULED')
+  //     .map(meeting => ({
+  //       id: meeting.id,
+  //       startTime: meeting.startTime,
+  //       status: meeting.status,
+  //       guestName: meeting.guestName,
+  //       endTime: meeting.endTime,
+  //       eventId: eventId
+  //     }))
+  // );
 
+  //   console.log('scheduled meetings:', scheduledMeetings);
   // Validación temprana: evento debe existir y tener disponibilidad
   if (!event || !event.user.availability) return [];
-  
+
   // Extraer datos necesarios
   const { availability, meetings } = event.user;
   const daysOfWeek = Object.values(DayOfWeekEnum); // Todos los días de la semana
   const availableDays = [];
 
+  // Si se proporciona una fecha específica, filtrar solo ese día
+  let targetDate: Date | null = null;
+  let targetDayOfWeek: string | null = null;
+
+  if (date) {
+    targetDate = parseISO(date);
+    // Obtener el día de la semana de la fecha proporcionada
+    targetDayOfWeek = format(targetDate, 'EEEE').toUpperCase();
+    // Filtrar solo para procesar el día de la semana de la fecha específica
+    daysOfWeek.length = 0; // Vaciar el array
+    daysOfWeek.push(targetDayOfWeek as DayOfWeekEnum);
+  }
+
   // BUCLE PRINCIPAL: Procesar cada día de la semana
   for (const dayOfWeek of daysOfWeek) {
-    // Calcular la próxima fecha que corresponde a este día
-    const nextDate = getNextDateForDay(dayOfWeek);
+    // Calcular la fecha correcta para este día
+    // Si tenemos una fecha específica, usamos esa en lugar de calcular la próxima
+    const dayDate = targetDate || getNextDateForDay(dayOfWeek);
 
     // Buscar si este día tiene configuración de disponibilidad
     const dayAvailability = availability.days.find((d) => d.day === dayOfWeek);
-    
+
     if (dayAvailability) {
       // Generar slots solo si el día está marcado como disponible
       const slots = dayAvailability.isAvailable
         ? generateAvailableTimeSlots(
-            dayAvailability.startTime,  // Hora inicio del día
-            dayAvailability.endTime,    // Hora fin del día
-            event.duration,             // Duración del evento en minutos
-            meetings,                   // Reuniones existentes para evitar conflictos
-            format(nextDate, "yyyy-MM-dd"), // Fecha como string
-            availability.timeGap        // Intervalo entre citas
-          )
+          dayAvailability.startTime,  // Hora inicio del día
+          dayAvailability.endTime,    // Hora fin del día
+          event.duration,             // Duración del evento en minutos
+          meetings,                   // Reuniones existentes para evitar conflictos
+          format(dayDate, "yyyy-MM-dd"),
+          availability.timeGap,        // Intervalo entre citas
+          timezone 
+        )
         : []; // Array vacío si el día no está disponible
 
       // Agregar día procesado a resultado
       availableDays.push({
         day: dayOfWeek,
+        date: format(dayDate, "yyyy-MM-dd"), // Incluir la fecha explícitamente
         slots,
         isAvailable: dayAvailability.isAvailable,
       });
     }
   }
-  console.log("Available days for public event:", availableDays);
+  console.log("Lista de dias disponibles:", availableDays);
   return availableDays;
 };
 
@@ -250,17 +310,18 @@ function generateAvailableTimeSlots(
   duration: number,
   meetings: { startTime: Date; endTime: Date }[],
   dateStr: string,
-  timeGap: number = 30
+  timeGap: number = 30,
+  timezone: string = 'UTC'
 ) {
   const slots = [];
 
   // Crear timestamps completos combinando fecha + horarios de disponibilidad
   let slotStartTime = parseISO(
-    `${dateStr}T${startTime.toISOString().slice(11, 16)}` // YYYY-MM-DDTHH:mm
+    `${dateStr}T${format(startTime, 'HH:mm')}:00Z`
   );
 
   let slotEndTime = parseISO(
-    `${dateStr}T${endTime.toISOString().slice(11, 16)}`
+    `${dateStr}T${format(endTime, 'HH:mm')}:00Z`
   );
 
   const now = new Date();
@@ -276,7 +337,8 @@ function generateAvailableTimeSlots(
       // VALIDACIÓN 2: Verificar que no hay conflicto con reuniones existentes
       if (isSlotAvailable(slotStartTime, slotEnd, meetings)) {
         // Slot válido: agregar solo la hora en formato HH:mm
-        slots.push(format(slotStartTime, "HH:mm"));
+        // slots.push(format(slotStartTime, "HH:mm"));
+        slots.push(formatInTimeZone(slotStartTime, timezone, "HH:mm"));
       }
     }
 

@@ -187,6 +187,30 @@ Una aplicación backend completa para gestión de calendarios y programación de
 | GET | `/public/:eventId` | Obtener disponibilidad para evento público | ❌ |
 | PUT | `/update` | Actualizar disponibilidad | ✅ |
 
+#### ✨ Nuevos parámetros de consulta
+Todos los endpoints de disponibilidad ahora soportan los siguientes parámetros:
+
+| Parámetro | Descripción | Ejemplo |
+|-----------|-------------|---------|
+| `timezone` | Zona horaria del usuario (IANA) | `America/Mexico_City`, `Europe/Bucharest` |
+| `date` | Fecha específica para slots (formato YYYY-MM-DD) | `2025-06-13` |
+
+#### Ejemplos de uso mejorados
+```bash
+# Obtener disponibilidad personal en zona horaria específica
+curl -X GET http://localhost:8000/api/availability/me?timezone=America/New_York \
+  -H "Authorization: Bearer tu_jwt_token"
+
+# Obtener slots disponibles para una fecha específica en zona horaria específica  
+curl -X GET http://localhost:8000/api/availability/public/event-id?timezone=America/Mexico_City&date=2025-06-10
+
+# Actualizar disponibilidad desde zona horaria específica
+curl -X PUT http://localhost:8000/api/availability/update \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer tu_jwt_token" \
+  -d '{...}' \
+  ?timezone=Europe/Bucharest
+
 ### 🔗 Integraciones (`/api/integration`) - **SCOPE AMPLIADO**
 | Método | Endpoint | Descripción | Auth Requerida |
 |--------|----------|-------------|----------------|
