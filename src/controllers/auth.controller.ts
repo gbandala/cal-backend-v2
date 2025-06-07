@@ -10,7 +10,8 @@ export const registerController = asyncHandlerAndValidation(
   RegisterDto,
   "body",
   async (req: Request, res: Response, registerDTO) => {
-    const { user } = await registerService(registerDTO);
+    const timezone = req.query.timezone as string || 'UTC';
+    const { user } = await registerService(registerDTO,timezone);
 
     return res.status(HTTPSTATUS.CREATED).json({
       message: "User created successfully",

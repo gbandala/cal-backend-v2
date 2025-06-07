@@ -50,6 +50,7 @@ CREATE TABLE "users" (
     "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
     "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
     "availabilityId" uuid,
+    "timezone" character varying,
     CONSTRAINT "UQ_fe0bb3f6520ee0469504521e710" UNIQUE ("username"),
     CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"),
     CONSTRAINT "REL_19bdac20a255ec8d172c129158" UNIQUE ("availabilityId"),

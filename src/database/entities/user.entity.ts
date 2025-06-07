@@ -37,6 +37,9 @@ export class User {
   @Column({ nullable: true })
   imageUrl: string;
 
+  @Column({ nullable: true })
+  timezone: string;
+
   @OneToMany(() => Event, (event) => event.user, {
     cascade: true,
   })

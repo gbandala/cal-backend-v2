@@ -44,16 +44,6 @@ export const getUserAvailabilityService = async (userId: string, timezone: strin
     days: [],
   };
 
-  // Procesar cada día de disponibilidad configurado
-  // user.availability.days.forEach((dayAvailability) => {
-  //   availabilityData.days.push({
-  //     day: dayAvailability.day, // Día de la semana (enum)
-  //     // Convertir Date a string formato HH:mm (extrae solo la parte de tiempo)
-  //     startTime: dayAvailability.startTime.toISOString().slice(11, 16),
-  //     endTime: dayAvailability.endTime.toISOString().slice(11, 16),
-  //     isAvailable: dayAvailability.isAvailable, // Booleano si está disponible
-  //   });
-  // });
   // Procesar cada día de disponibilidad y convertir a zona horaria del usuario
   user.availability.days.forEach((dayAvailability) => {
     availabilityData.days.push({
@@ -179,20 +169,6 @@ export const getAvailabilityForPublicEventService = async (
       "user.meetings",           // Reuniones ya programadas (para evitar conflictos)
     ],
   });
-  // const scheduledMeetings = Array.from(
-  //   (event?.user.meetings || [])
-  //     .filter(meeting => meeting.status === 'SCHEDULED')
-  //     .map(meeting => ({
-  //       id: meeting.id,
-  //       startTime: meeting.startTime,
-  //       status: meeting.status,
-  //       guestName: meeting.guestName,
-  //       endTime: meeting.endTime,
-  //       eventId: eventId
-  //     }))
-  // );
-
-  //   console.log('scheduled meetings:', scheduledMeetings);
   // Validación temprana: evento debe existir y tener disponibilidad
   if (!event || !event.user.availability) return [];
 
