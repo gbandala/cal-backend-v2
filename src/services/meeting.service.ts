@@ -79,8 +79,31 @@ export const getUserMeetingsService = async (
     order: { startTime: "ASC" }, // Más próximas primero
   });
 
-  console.log("Meetings found:", meetings);
-  return meetings || []; // Retornar array vacío si no hay resultados
+  // console.log("Meetings found:", meetings);
+  // return meetings || []; // Retornar array vacío si no hay resultados
+
+  console.log("Meetings found (before date processing):", meetings);
+
+  // PROCESAR FECHAS: Remover 'Z' para que se interpreten como horario local
+  const processedMeetings = meetings.map(meeting => {
+    const processedMeeting = { ...meeting };
+    
+    // Procesar startTime
+    if (processedMeeting.startTime) {
+      const startTimeStr = processedMeeting.startTime.toISOString();
+      processedMeeting.startTime = startTimeStr.replace('Z', '') as any;
+    }
+    
+    // Procesar endTime
+    if (processedMeeting.endTime) {
+      const endTimeStr = processedMeeting.endTime.toISOString();
+      processedMeeting.endTime = endTimeStr.replace('Z', '') as any;
+    }    
+    return processedMeeting;
+  });
+
+  console.log("Meetings found (after date processing):", processedMeetings);
+  return processedMeetings || []; // Retornar array vacío si no hay resultados
 };
 
 /**
