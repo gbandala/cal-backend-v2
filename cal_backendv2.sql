@@ -140,8 +140,8 @@ COMMENT ON COLUMN "meetings"."calendar_id" IS 'ID del calendario donde se creó 
 CREATE TABLE "day_availability" (
     "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
     "day" "public"."day_availability_day_enum" NOT NULL,
-    "startTime" TIMESTAMP NOT NULL,
-    "endTime" TIMESTAMP NOT NULL,
+    "startTime" TIME NOT NULL,
+    "endTime" TIME NOT NULL,
     "isAvailable" boolean NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
     "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),

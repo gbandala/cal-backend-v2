@@ -34,8 +34,10 @@ export const createMeetBookingForGuestController = asyncHandlerAndValidation(
   CreateMeetingDto,
   "body",
   async (req: Request, res: Response, createMeetingDto) => {
+    const timezone = req.query.timezone as string || 'UTC';
     const { meetLink, meeting } = await createMeetBookingForGuestService(
-      createMeetingDto
+      createMeetingDto,
+      timezone
     );
     return res.status(HTTPSTATUS.CREATED).json({
       message: "Meeting scheduled successfully",

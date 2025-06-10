@@ -30,6 +30,8 @@ import { BadRequestException, NotFoundException } from "../utils/app-error";
 import { validateGoogleToken } from "./integration.service";
 import { googleOAuth2Client } from "../config/oauth.config";
 import { google } from "googleapis";
+import { toZonedTime, formatInTimeZone, format } from "date-fns-tz";
+
 
 /**
  * OBTENER REUNIONES DE USUARIO CON FILTROS
@@ -77,6 +79,7 @@ export const getUserMeetingsService = async (
     order: { startTime: "ASC" }, // Más próximas primero
   });
 
+  console.log("Meetings found:", meetings);
   return meetings || []; // Retornar array vacío si no hay resultados
 };
 
@@ -93,15 +96,24 @@ export const getUserMeetingsService = async (
  * @returns Objeto con meetLink y datos de la reunión creada
  */
 export const createMeetBookingForGuestService = async (
-  createMeetingDto: CreateMeetingDto
+  createMeetingDto: CreateMeetingDto,
+  timezone: string
 ) => {
+
   // Extraer y convertir datos del DTO
   const { eventId, guestEmail, guestName, additionalInfo } = createMeetingDto;
   const startTime = new Date(createMeetingDto.startTime);
   const endTime = new Date(createMeetingDto.endTime);
+  // console.log('---------------------------------------------------------------');
+  // console.log('startTime:', startTime);
+  // console.log('endTime:', endTime);
+  // console.log('timezone startTime:', timezone, formatInTimeZone(startTime, timezone, 'yyyy-MM-dd HH:mm'));
+  // console.log('timezone endTime:', timezone, formatInTimeZone(endTime, timezone, 'yyyy-MM-dd HH:mm'));
+  // console.log('---------------------------------------------------------------');
 
   // Repositorios necesarios
   const eventRepository = AppDataSource.getRepository(Event);
+
   const integrationRepository = AppDataSource.getRepository(Integration);
   const meetingRepository = AppDataSource.getRepository(Meeting);
 
@@ -155,6 +167,22 @@ export const createMeetBookingForGuestService = async (
       meetIntegration.expiry_date
     );
 
+  // ✅ SOLUCIÓN SIMPLE: Interpretar la fecha como hora local
+  const formatDateForCalendar = (date: Date) => {
+    return date.toISOString().replace('Z', '');
+  };
+
+    const formattedStart = formatDateForCalendar(startTime);
+    const formattedEnd = formatDateForCalendar(endTime);
+
+    console.log('---------------------------------------------------------------');
+    console.log('startTime:', startTime);
+    console.log('endTime:', endTime);
+    console.log('timezone startTime:', timezone, formattedStart);
+    console.log('timezone endTime:', timezone, formattedEnd);
+    console.log('---------------------------------------------------------------');
+
+
     // Crear evento en Google Calendar con Google Meet automático
     const response = await calendar.events.insert({
       calendarId: event.calendar_id, // ← 🎯 CAMBIO: usar calendar específico
@@ -162,8 +190,17 @@ export const createMeetBookingForGuestService = async (
       requestBody: {
         summary: `${guestName} - ${event.title}`,
         description: additionalInfo,
-        start: { dateTime: startTime.toISOString() },
-        end: { dateTime: endTime.toISOString() },
+        start: {
+          dateTime: formattedStart,
+          timeZone: timezone, // Usar zona horaria del invitado
+        },
+        end: {
+          dateTime: formattedEnd,
+          timeZone: timezone, // Usar zona horaria del invitado
+        },
+        // start: { dateTime: startTime.toLocaleDateString() + 'T' + startTime.toLocaleTimeString() },
+        // end: { dateTime: endTime.toLocaleDateString() + 'T' + endTime.toLocaleTimeString() },
+        // end: {dateTime:endTime},
         attendees: [
           { email: guestEmail },
           { email: event.user.email }
@@ -175,6 +212,7 @@ export const createMeetBookingForGuestService = async (
         },
       },
     });
+    console.log("Google Calendar event created:", response.data);
 
     // Extraer datos importantes de la respuesta
     meetLink = response.data.hangoutLink!; // Enlace de Google Meet
@@ -195,6 +233,7 @@ export const createMeetBookingForGuestService = async (
     calendarEventId: calendarEventId, // Para cancelaciones futuras
     calendarAppType: calendarAppType, // Para saber qué API usar
   });
+  console.log("Creating meeting:", meeting);
 
   await meetingRepository.save(meeting);
 

@@ -29,11 +29,11 @@ export class DayAvailability {
   @Column({ type: "enum", enum: DayOfWeekEnum })
   day: DayOfWeekEnum;
 
-  @Column()
-  startTime: Date;
+  @Column({ type: "time" })
+  startTime: string;
 
-  @Column()
-  endTime: Date;
+  @Column({ type: "time" })
+  endTime: string;
 
   @Column({ default: true })
   isAvailable: boolean;

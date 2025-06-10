@@ -49,8 +49,10 @@ export const getUserAvailabilityService = async (userId: string, timezone: strin
     availabilityData.days.push({
       day: dayAvailability.day,
       // Convertir UTC a zona horaria del usuario para visualización
-      startTime: formatInTimeZone(dayAvailability.startTime, timezone, 'HH:mm'),
-      endTime: formatInTimeZone(dayAvailability.endTime, timezone, 'HH:mm'),
+      // startTime: formatInTimeZone(dayAvailability.startTime, timezone, 'HH:mm'),
+      // endTime: formatInTimeZone(dayAvailability.endTime, timezone, 'HH:mm'),
+      startTime: dayAvailability.startTime.slice(0,5),
+      endTime: dayAvailability.endTime.slice(0,5),
       isAvailable: dayAvailability.isAvailable,
     });
   });
@@ -92,21 +94,6 @@ export const updateAvailabilityService = async (
     throw new NotFoundException("User not found");
   }
 
-  // Transformar datos de entrada: convertir strings de tiempo a objetos Date
-  // const dayAvailabilityData = data.days.map(
-  //   ({ day, isAvailable, startTime, endTime }) => {
-  //     // Usar fecha base (hoy) para crear objetos Date con solo la hora relevante
-  //     const baseDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-  //     return {
-  //       day: day.toUpperCase() as DayOfWeekEnum, // Normalizar a mayúsculas
-  //       // Crear Date objects combinando fecha base + tiempo + zona UTC
-  //       startTime: new Date(`${baseDate}T${startTime}:00Z`),
-  //       endTime: new Date(`${baseDate}T${endTime}:00Z`),
-  //       isAvailable,
-  //     };
-  //   }
-  // );
-
   // Transformar datos: convertir strings de tiempo a objetos Date en UTC
   const dayAvailabilityData = data.days.map(
     ({ day, isAvailable, startTime, endTime }) => {
@@ -114,8 +101,10 @@ export const updateAvailabilityService = async (
       return {
         day: day.toUpperCase() as DayOfWeekEnum,
         // Crear Date objects en UTC directamente
-        startTime: toZonedTime(parseISO(`2000-01-01T${startTime}:00`), timezone),
-        endTime: toZonedTime(parseISO(`2000-01-01T${endTime}:00`), timezone),
+        // startTime: toZonedTime(parseISO(`2000-01-01T${startTime}:00`), timezone),
+        // endTime: toZonedTime(parseISO(`2000-01-01T${endTime}:00`), timezone),
+        startTime: startTime,
+        endTime: endTime,
         isAvailable,
       };
     }
@@ -157,73 +146,84 @@ export const getAvailabilityForPublicEventService = async (
   timezone: string = 'UTC',
   date?: string
 ) => {
+
+  console.log('informacion de evento:', eventId, timezone, date);
+
   const eventRepository = AppDataSource.getRepository(Event);
 
-  // Buscar evento con TODAS las relaciones necesarias para el cálculo
-  const event = await eventRepository.findOne({
-    where: { id: eventId, isPrivate: false }, // Solo eventos públicos
-    relations: [
-      "user",                    // Dueño del evento
-      "user.availability",       // Configuración de disponibilidad del dueño
-      "user.availability.days",  // Días específicos de disponibilidad
-      "user.meetings",           // Reuniones ya programadas (para evitar conflictos)
-    ],
-  });
-  // Validación temprana: evento debe existir y tener disponibilidad
-  if (!event || !event.user.availability) return [];
+  try {
+    // Buscar evento con TODAS las relaciones necesarias para el cálculo
+    const event = await eventRepository.findOne({
+      where: { id: eventId, isPrivate: false }, // Solo eventos públicos
+      relations: [
+        "user",                    // Dueño del evento
+        "user.availability",       // Configuración de disponibilidad del dueño
+        "user.availability.days",  // Días específicos de disponibilidad
+        "user.meetings",           // Reuniones ya programadas (para evitar conflictos)
+      ],
+    });
+    // Validación temprana: evento debe existir y tener disponibilidad
+    if (!event || !event.user.availability) return [];
 
-  // Extraer datos necesarios
-  const { availability, meetings } = event.user;
-  const daysOfWeek = Object.values(DayOfWeekEnum); // Todos los días de la semana
-  const availableDays = [];
+    console.log('Evento:', event);
 
-  // Si se proporciona una fecha específica, filtrar solo ese día
-  let targetDate: Date | null = null;
-  let targetDayOfWeek: string | null = null;
+    // Extraer datos necesarios
+    const { availability, meetings } = event.user;
+    const daysOfWeek = Object.values(DayOfWeekEnum); // Todos los días de la semana
+    const availableDays = [];
 
-  if (date) {
-    targetDate = parseISO(date);
-    // Obtener el día de la semana de la fecha proporcionada
-    targetDayOfWeek = format(targetDate, 'EEEE').toUpperCase();
-    // Filtrar solo para procesar el día de la semana de la fecha específica
-    daysOfWeek.length = 0; // Vaciar el array
-    daysOfWeek.push(targetDayOfWeek as DayOfWeekEnum);
-  }
+    // Si se proporciona una fecha específica, filtrar solo ese día
+    let targetDate: Date | null = null;
+    let targetDayOfWeek: string | null = null;
 
-  // BUCLE PRINCIPAL: Procesar cada día de la semana
-  for (const dayOfWeek of daysOfWeek) {
-    // Calcular la fecha correcta para este día
-    // Si tenemos una fecha específica, usamos esa en lugar de calcular la próxima
-    const dayDate = targetDate || getNextDateForDay(dayOfWeek);
-
-    // Buscar si este día tiene configuración de disponibilidad
-    const dayAvailability = availability.days.find((d) => d.day === dayOfWeek);
-
-    if (dayAvailability) {
-      // Generar slots solo si el día está marcado como disponible
-      const slots = dayAvailability.isAvailable
-        ? generateAvailableTimeSlots(
-          dayAvailability.startTime,  // Hora inicio del día
-          dayAvailability.endTime,    // Hora fin del día
-          event.duration,             // Duración del evento en minutos
-          meetings,                   // Reuniones existentes para evitar conflictos
-          format(dayDate, "yyyy-MM-dd"),
-          availability.timeGap,        // Intervalo entre citas
-          timezone 
-        )
-        : []; // Array vacío si el día no está disponible
-
-      // Agregar día procesado a resultado
-      availableDays.push({
-        day: dayOfWeek,
-        date: format(dayDate, "yyyy-MM-dd"), // Incluir la fecha explícitamente
-        slots,
-        isAvailable: dayAvailability.isAvailable,
-      });
+    if (date) {
+      targetDate = parseISO(date);
+      // Obtener el día de la semana de la fecha proporcionada
+      targetDayOfWeek = format(targetDate, 'EEEE').toUpperCase();
+      // Filtrar solo para procesar el día de la semana de la fecha específica
+      daysOfWeek.length = 0; // Vaciar el array
+      daysOfWeek.push(targetDayOfWeek as DayOfWeekEnum);
     }
+
+    // BUCLE PRINCIPAL: Procesar cada día de la semana
+    for (const dayOfWeek of daysOfWeek) {
+      // Calcular la fecha correcta para este día
+      // Si tenemos una fecha específica, usamos esa en lugar de calcular la próxima
+      const dayDate = targetDate || getNextDateForDay(dayOfWeek);
+
+      // Buscar si este día tiene configuración de disponibilidad
+      const dayAvailability = availability.days.find((d) => d.day === dayOfWeek);
+      console.log('dayAvailability', dayAvailability);
+
+      if (dayAvailability) {
+        // Generar slots solo si el día está marcado como disponible
+        const slots = dayAvailability.isAvailable
+          ? generateAvailableTimeSlots(
+            dayAvailability.startTime,  // Hora inicio del día
+            dayAvailability.endTime,    // Hora fin del día
+            event.duration,             // Duración del evento en minutos
+            meetings,                   // Reuniones existentes para evitar conflictos
+            format(dayDate, "yyyy-MM-dd"),
+            availability.timeGap,        // Intervalo entre citas
+            timezone
+          )
+          : []; // Array vacío si el día no está disponible
+
+        // Agregar día procesado a resultado
+        availableDays.push({
+          day: dayOfWeek,
+          date: format(dayDate, "yyyy-MM-dd"), // Incluir la fecha explícitamente
+          slots,
+          isAvailable: dayAvailability.isAvailable,
+        });
+      }
+    }
+    console.log("Lista de dias disponibles:", availableDays);
+    return availableDays;
+  } catch (error) {
+    console.error('Error en getAvailabilityForPublicEventService :', error);
   }
-  console.log("Lista de dias disponibles:", availableDays);
-  return availableDays;
+
 };
 
 /**
@@ -281,8 +281,8 @@ function getNextDateForDay(dayOfWeek: string): Date {
  * 4. Agregar slots válidos al array resultado
  */
 function generateAvailableTimeSlots(
-  startTime: Date,
-  endTime: Date,
+  startTime: string,
+  endTime: string,
   duration: number,
   meetings: { startTime: Date; endTime: Date }[],
   dateStr: string,
@@ -290,39 +290,48 @@ function generateAvailableTimeSlots(
   timezone: string = 'UTC'
 ) {
   const slots = [];
+  // console.log('startTime>', startTime);
+  // console.log('endTime>', endTime);
+  // console.log('dateStr:', dateStr);
 
-  // Crear timestamps completos combinando fecha + horarios de disponibilidad
-  let slotStartTime = parseISO(
-    `${dateStr}T${format(startTime, 'HH:mm')}:00Z`
-  );
+  try {
 
-  let slotEndTime = parseISO(
-    `${dateStr}T${format(endTime, 'HH:mm')}:00Z`
-  );
+    let slotStartTime = parseISO(`${dateStr}T${startTime.slice(0, 5)}`);
+    let slotEndTime = parseISO(`${dateStr}T${endTime.slice(0, 5)}`);
 
-  const now = new Date();
-  const isToday = format(now, "yyyy-MM-dd") === dateStr; // Verificar si es hoy
+    // console.log('startTime:', startTime);
+    // console.log('endTime:', endTime);
 
-  // BUCLE: Generar slots desde inicio hasta fin
-  while (slotStartTime < slotEndTime) {
-    // VALIDACIÓN 1: No permitir slots en el pasado
-    if (!isToday || slotStartTime >= now) {
-      // Calcular cuándo terminaría este slot específico
-      const slotEnd = new Date(slotStartTime.getTime() + duration * 60000);
+    const now = new Date();
+    const isToday = format(now, "yyyy-MM-dd") === dateStr; // Verificar si es hoy
 
-      // VALIDACIÓN 2: Verificar que no hay conflicto con reuniones existentes
-      if (isSlotAvailable(slotStartTime, slotEnd, meetings)) {
-        // Slot válido: agregar solo la hora en formato HH:mm
-        // slots.push(format(slotStartTime, "HH:mm"));
-        slots.push(formatInTimeZone(slotStartTime, timezone, "HH:mm"));
+    // BUCLE: Generar slots desde inicio hasta fin
+    while (slotStartTime < slotEndTime) {
+      // VALIDACIÓN 1: No permitir slots en el pasado
+      if (!isToday || slotStartTime >= now) {
+        // Calcular cuándo terminaría este slot específico
+        const slotEnd = new Date(slotStartTime.getTime() + duration * 60000);
+
+        // VALIDACIÓN 2: Verificar que no hay conflicto con reuniones existentes
+        if (isSlotAvailable(slotStartTime, slotEnd, meetings)) {
+          // Slot válido: agregar solo la hora en formato HH:mm
+          slots.push(format(slotStartTime, "HH:mm"));
+          // slots.push(formatInTimeZone(slotStartTime, timezone, "HH:mm"));
+          // slots.push(slotStartTime);
+        }
+        // slots.push(slotStartTime);
       }
+
+      // Avanzar al siguiente slot según el intervalo configurado
+      slotStartTime = addMinutes(slotStartTime, timeGap);
     }
 
-    // Avanzar al siguiente slot según el intervalo configurado
-    slotStartTime = addMinutes(slotStartTime, timeGap);
+    return slots;
+  } catch (error) {
+
+    console.log('Error en : generateAvailableTimeSlots', error)
   }
 
-  return slots;
 }
 
 /**
@@ -344,11 +353,17 @@ function isSlotAvailable(
   meetings: { startTime: Date; endTime: Date }[]
 ): boolean {
   // Verificar contra cada reunión existente
-  for (const meeting of meetings) {
-    // Detección de solapamiento: si hay cualquier intersección, el slot no está disponible
-    if (slotStart < meeting.endTime && slotEnd > meeting.startTime) {
-      return false; // Conflicto detectado
+  try {
+    for (const meeting of meetings) {
+      // Detección de solapamiento: si hay cualquier intersección, el slot no está disponible
+      if (slotStart < meeting.endTime && slotEnd > meeting.startTime) {
+        return false; // Conflicto detectado
+      }
     }
+    return true; // Sin conflictos: slot disponible
+  } catch (error) {
+    console.log('Error en isSlotAvailable', error);
+    return false;
   }
-  return true; // Sin conflictos: slot disponible
+
 }
