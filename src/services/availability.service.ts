@@ -51,8 +51,8 @@ export const getUserAvailabilityService = async (userId: string, timezone: strin
       // Convertir UTC a zona horaria del usuario para visualización
       // startTime: formatInTimeZone(dayAvailability.startTime, timezone, 'HH:mm'),
       // endTime: formatInTimeZone(dayAvailability.endTime, timezone, 'HH:mm'),
-      startTime: dayAvailability.startTime.slice(0,5),
-      endTime: dayAvailability.endTime.slice(0,5),
+      startTime: dayAvailability.startTime.slice(0, 5),
+      endTime: dayAvailability.endTime.slice(0, 5),
       isAvailable: dayAvailability.isAvailable,
     });
   });
@@ -284,7 +284,8 @@ function generateAvailableTimeSlots(
   startTime: string,
   endTime: string,
   duration: number,
-  meetings: { startTime: Date; endTime: Date }[],
+  // meetings: { startTime: Date; endTime: Date }[],
+  meetings: { startTime: Date; endTime: Date; status: string }[], // ✅ Agregar status
   dateStr: string,
   timeGap: number = 30,
   timezone: string = 'UTC'
@@ -347,17 +348,38 @@ function generateAvailableTimeSlots(
  * - El inicio del slot es antes del fin de la reunión Y
  * - El fin del slot es después del inicio de la reunión
  */
+// function isSlotAvailable(
+//   slotStart: Date,
+//   slotEnd: Date,
+//   meetings: { startTime: Date; endTime: Date }[]
+// ): boolean {
+//   // Verificar contra cada reunión existente
+//   try {
+//     for (const meeting of meetings) {
+//       // Detección de solapamiento: si hay cualquier intersección, el slot no está disponible
+//       if (slotStart < meeting.endTime && slotEnd > meeting.startTime) {
+//         return false; // Conflicto detectado
+//       }
+//     }
+//     return true; // Sin conflictos: slot disponible
+//   } catch (error) {
+//     console.log('Error en isSlotAvailable', error);
+//     return false;
+//   }
+
+// }
 function isSlotAvailable(
   slotStart: Date,
   slotEnd: Date,
-  meetings: { startTime: Date; endTime: Date }[]
+  meetings: { startTime: Date; endTime: Date; status: string }[] // ✅ Agregar status
 ): boolean {
-  // Verificar contra cada reunión existente
   try {
     for (const meeting of meetings) {
-      // Detección de solapamiento: si hay cualquier intersección, el slot no está disponible
-      if (slotStart < meeting.endTime && slotEnd > meeting.startTime) {
-        return false; // Conflicto detectado
+      // ✅ Solo considerar reuniones programadas (SCHEDULED)
+      if (meeting.status === 'SCHEDULED' &&
+        slotStart < meeting.endTime &&
+        slotEnd > meeting.startTime) {
+        return false; // Conflicto detectado con reunión activa
       }
     }
     return true; // Sin conflictos: slot disponible
@@ -365,5 +387,4 @@ function isSlotAvailable(
     console.log('Error en isSlotAvailable', error);
     return false;
   }
-
 }
