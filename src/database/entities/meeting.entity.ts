@@ -56,11 +56,20 @@ export class Meeting {
     name: 'calendar_id',
     type: 'varchar',
     default: 'primary',
-    nullable: false
+    nullable: true
   })
-  calendar_id: string;
+  calendar_id?: string;
   // *** FIN NUEVO CAMPO ***
 
+  // AGREGAR campos de Zoom:
+  @Column({ name: 'zoom_meeting_id', type: 'bigint', nullable: true })
+  zoom_meeting_id?: number;
+
+  @Column({ name: 'zoom_join_url', type: 'varchar', nullable: true })
+  zoom_join_url?: string;
+
+  @Column({ name: 'zoom_start_url', type: 'varchar', nullable: true })
+  zoom_start_url?: string;
 
   @Column({
     type: "enum",

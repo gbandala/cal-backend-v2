@@ -5,6 +5,7 @@ import {
   connectAppController,
   getUserIntegrationsController,
   googleOAuthCallbackController,
+  zoomOAuthCallbackController,
 } from "../controllers/integration.controller";
 
 const integrationRoutes = Router();
@@ -28,5 +29,6 @@ integrationRoutes.get(
 );
 
 integrationRoutes.get("/google/callback", googleOAuthCallbackController);
+integrationRoutes.get("/zoom/callback", zoomOAuthCallbackController); 
 
 export default integrationRoutes;

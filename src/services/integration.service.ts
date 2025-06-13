@@ -7,7 +7,7 @@ import {
   IntegrationProviderEnum,
 } from "../database/entities/integration.entity";
 import { BadRequestException } from "../utils/app-error";
-import { googleOAuth2Client } from "../config/oauth.config";
+import { googleOAuth2Client, zoomOAuth2Client } from "../config/oauth.config";
 import { encodeState } from "../utils/helper";
 
 /**
@@ -104,7 +104,7 @@ export const getUserIntegrationsService = async (userId: string) => {
     };
   });
 
-  console.log('Resultado de getUserIntegrationsService:', result);
+  // console.log('Resultado de getUserIntegrationsService:', result);
 
   return result;
 };
@@ -162,8 +162,9 @@ export const connectAppService = async (
 ) => {
   // PASO 1: Codificar estado para callback OAuth
   // El estado incluye userId + appType para identificar la operación
-  // cuando OAuth provider hace callback a nuestra aplicación
+  // cuando OAuth provider hace callback de Google a nuestra aplicación
   const state = encodeState({ userId, appType });
+  // console.log("Encoded state for OAuth:", state);
 
   let authUrl: string;
 
@@ -183,16 +184,20 @@ export const connectAppService = async (
       });
       break;
 
-    // CASOS FUTUROS: Zoom, Microsoft, etc.
-    // case IntegrationAppTypeEnum.ZOOM_MEETING:
-    //   authUrl = generateZoomAuthUrl(state);
-    //   break;
+    case IntegrationAppTypeEnum.ZOOM_MEETING:
+      authUrl = `${zoomOAuth2Client.authUrl}?` +
+        `response_type=code&` +
+        `client_id=${zoomOAuth2Client.clientId}&` +
+        `redirect_uri=${encodeURIComponent(zoomOAuth2Client.redirectUri)}&`+
+        `state=${encodeURIComponent(state)}`;
+      console.log("Zoom OAuth URL:", authUrl);
+      break;
 
     default:
       // Error para tipos no implementados
       throw new BadRequestException("Unsupported app type");
   }
-  console.log("Generated OAuth URL:", authUrl);
+  // console.log("Generated OAuth URL:", authUrl);
   // PASO 3: Retornar URL para redirección del usuario
   return { url: authUrl };
 };
@@ -220,6 +225,10 @@ export const createIntegrationService = async (data: {
   refresh_token?: string;                 // Token para renovar access tokens
   expiry_date: number | null;            // Timestamp de expiración
   metadata: any;                         // Datos adicionales del proveedor
+  calendar_id?: string;
+  calendar_name?: string;
+  zoom_user_id?: string;
+  zoom_account_id?: string;
 }) => {
   const integrationRepository = AppDataSource.getRepository(Integration);
 
@@ -247,6 +256,14 @@ export const createIntegrationService = async (data: {
     metadata: data.metadata,             // Información adicional del proveedor
     userId: data.userId,                 // Relación con usuario propietario
     isConnected: true,                   // Marca como activa inmediatamente
+    ...(data.provider === IntegrationProviderEnum.GOOGLE && {
+      calendar_id: data.calendar_id || 'primary',
+      calendar_name: data.calendar_name
+    }),
+    ...(data.provider === IntegrationProviderEnum.ZOOM && {
+      zoom_user_id: data.zoom_user_id,
+      zoom_account_id: data.zoom_account_id
+    })
   });
 
   // PERSISTENCIA: Guardar en base de datos
@@ -296,5 +313,33 @@ export const validateGoogleToken = async (
   }
 
   // TOKEN VÁLIDO: Retornar el actual sin cambios
+  return accessToken;
+};
+
+export const validateZoomToken = async (
+  accessToken: string,
+  refreshToken: string,
+  expiryDate: number | null
+) => {
+  // Verificar si el token está expirado
+  if (expiryDate === null || Date.now() >= expiryDate) {
+    // Renovar token con Zoom API
+    const response = await fetch(zoomOAuth2Client.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${zoomOAuth2Client.clientId}:${zoomOAuth2Client.clientSecret}`).toString('base64')}`
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken
+      })
+    });
+
+    const data = await response.json();
+    console.log("New Zoom access token obtained:", data.access_token);
+    return data.access_token;
+  }
+
   return accessToken;
 };

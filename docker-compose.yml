@@ -1,32 +1,3 @@
-# version: '3.8'
-
-# services:
-#   api:
-#     build:
-#       context: .
-#       dockerfile: Dockerfile
-#     ports:
-#       - "8000:8000"
-#     env_file:
-#       - .env
-#     environment:
-#       - PORT=${PORT}
-#       - DATABASE_URL=${DATABASE_URL}
-#       - JWT_SECRET=${JWT_SECRET}
-#       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
-#       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-#       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-#       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-#       - FRONTEND_ORIGIN=${FRONTEND_ORIGIN}
-#       - FRONTEND_INTEGRATION_URL=${FRONTEND_INTEGRATION_URL}
-#       - CALENDAR_CACHE_TTL=${CALENDAR_CACHE_TTL}
-#       - AUTO_SYNC_THRESHOLD=${AUTO_SYNC_THRESHOLD}
-#       - NODE_ENV=${NODE_ENV}
-#     volumes:
-#       - ./logs:/app/logs
-#       - ./tmp:/app/tmp
-#     restart: unless-stopped
-
 version: '3.8'
 
 services:

@@ -9,3 +9,13 @@ export const googleOAuth2Client = new google.auth.OAuth2(
 );
 
 //Zoom oauth
+export const zoomOAuth2Client = {
+  clientId: process.env.ZOOM_CLIENT_ID || '',
+  clientSecret: process.env.ZOOM_CLIENT_SECRET || '',
+  redirectUri: process.env.ZOOM_REDIRECT_URI || '',
+  authUrl: 'https://zoom.us/oauth/authorize',
+  tokenUrl: 'https://zoom.us/oauth/token',
+  scopes: ['meeting:write', 'meeting:read', 'user:read']
+};
+
+// user:read:user meeting:write:meeting meeting:read:meeting zoomapp:inmeeting

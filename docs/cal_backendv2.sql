@@ -322,3 +322,4 @@ INSERT INTO "user_calendars" (
 COMMENT ON DATABASE calendars IS 'Base de datos para sistema de calendarios con soporte para calendarios específicos de Google Calendar';
 
 -- Fin del script
+

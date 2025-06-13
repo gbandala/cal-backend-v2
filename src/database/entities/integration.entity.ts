@@ -32,7 +32,7 @@ interface GoogleMeetAndCalendarMetadata {
   token_type: string;
 }
 
-interface ZoomMetadata {}
+interface ZoomMetadata { }
 
 type IntegrationMetadata = GoogleMeetAndCalendarMetadata | ZoomMetadata;
 
@@ -66,18 +66,25 @@ export class Integration {
   isConnected: boolean;
 
   // *** NUEVOS CAMPOS PARA CALENDARIO POR DEFECTO ***
-  @Column({ 
-    name: 'calendar_id', 
-    type: 'varchar', 
-    default: 'primary',
-    nullable: false 
+  @Column({
+    name: 'calendar_id',
+    type: 'varchar',
+    default: 'primary', // Valor por defecto para calendar_id
+    nullable: true  // ← Era false, ahora true
   })
-  calendar_id: string;
+  calendar_id?: string;
 
-  @Column({ 
-    name: 'calendar_name', 
-    type: 'varchar', 
-    nullable: true 
+  // AGREGAR campos de Zoom:
+  @Column({ name: 'zoom_user_id', type: 'varchar', nullable: true })
+  zoom_user_id?: string;
+
+  @Column({ name: 'zoom_account_id', type: 'varchar', nullable: true })
+  zoom_account_id?: string;
+
+  @Column({
+    name: 'calendar_name',
+    type: 'varchar',
+    nullable: true
   })
   calendar_name?: string;
   // *** FIN NUEVOS CAMPOS ***
