@@ -30,7 +30,9 @@ export const createEventService = async (
   userId: string,
   createEventDto: CreateEventDto
 ) => {
+  console.log("Creating event for user:", userId, createEventDto);
   const eventRepository = AppDataSource.getRepository(Event);
+  console.log("Event repository initialized", eventRepository.metadata);
 
   // VALIDACIÓN: Verificar que el tipo de ubicación sea válido
   // EventLocationEnumType contiene valores como: "ONLINE", "IN_PERSON", "PHONE", etc.
@@ -44,6 +46,7 @@ export const createEventService = async (
   // Ejemplo: "Consultoría de Marketing" → "consultoria-marketing"
   // slugify() remueve acentos, espacios, caracteres especiales
   const slug = slugify(createEventDto.title);
+  console.log("Generated slug:", slug);
 
   // CREACIÓN DE ENTIDAD: Combinar DTO + datos generados + relación
   const event = eventRepository.create({

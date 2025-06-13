@@ -161,6 +161,8 @@ export const createMeetBookingForGuestService = async (
     console.log("Invalid location type:", event.locationType);
     throw new BadRequestException("Invalid location type");
   }
+  console.log("Event location type:", event.locationType);
+  console.log("Event user:", event);
 
   // PASO 3: VERIFICAR INTEGRACIÓN DE VIDEO CONFERENCIA DEL ORGANIZADOR
   const meetIntegration = await integrationRepository.findOne({
@@ -169,6 +171,8 @@ export const createMeetBookingForGuestService = async (
       app_type: IntegrationAppTypeEnum[event.locationType], // Buscar integración correspondiente
     },
   });
+
+  console.log("Meet integration found:", meetIntegration);
 
   if (!meetIntegration) {
     console.log("No video conferencing integration found for user:", event.user.id);
@@ -251,6 +255,7 @@ export const createMeetBookingForGuestService = async (
     calendarEventId = response.data.id!; // ID del evento en Google Calendar
     calendarAppType = calendarType; // Tipo de calendario usado
   } else if (event.locationType === EventLocationEnumType.ZOOM_MEETING) {
+    console.log("Creating Zoom meeting...");
     // Crear meeting de Zoom
     const { meetingData } = await createZoomMeeting(
       meetIntegration.access_token,
@@ -270,6 +275,7 @@ export const createMeetBookingForGuestService = async (
         }
       }
     );
+    console.log("Zoom meeting created:", meetingData);
 
     meetLink = meetingData.join_url;
     calendarEventId = meetingData.id.toString();
@@ -302,7 +308,7 @@ export const createMeetBookingForGuestService = async (
     })
 
   });
-  console.log("Creating meeting:", meeting);
+  console.log("Saved meeting:", meeting);
 
   await meetingRepository.save(meeting);
 
