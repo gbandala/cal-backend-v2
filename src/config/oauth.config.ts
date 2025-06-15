@@ -15,7 +15,14 @@ export const zoomOAuth2Client = {
   redirectUri: process.env.ZOOM_REDIRECT_URI || '',
   authUrl: 'https://zoom.us/oauth/authorize',
   tokenUrl: 'https://zoom.us/oauth/token',
-  scopes: ['meeting:write', 'meeting:read', 'user:read']
+  scopes: [
+    'user:read:user',
+    'meeting:read:meeting', 
+    'meeting:write:meeting', 
+    'meeting:update:meeting', 
+    'meeting:delete:meeting',  // 👈 SCOPE CORRECTO para eliminar
+    'zoomapp:inmeeting'
+  ],
 };
 
 // user:read:user meeting:write:meeting meeting:read:meeting zoomapp:inmeeting

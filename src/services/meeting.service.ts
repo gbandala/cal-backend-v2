@@ -31,6 +31,8 @@ import { validateGoogleToken, validateZoomToken } from "./integration.service";
 import { googleOAuth2Client } from "../config/oauth.config";
 import { google } from "googleapis";
 import { toZonedTime, formatInTimeZone, format } from "date-fns-tz";
+import { deleteZoomMeetingWithValidation, buildZoomReauthUrl } from '../config/zoom-token-helpers';
+import { zoomOAuth2Client } from '../config/oauth.config';
 
 
 /**
@@ -341,6 +343,7 @@ export const cancelMeetingService = async (meetingId: string) => {
     relations: ["event", "event.user"], // Necesitamos datos del organizador
   });
 
+  console.log("Meeting found to cancel:", meeting);
   if (!meeting) throw new NotFoundException("Meeting not found");
 
   try {
@@ -363,6 +366,8 @@ export const cancelMeetingService = async (meetingId: string) => {
         calendarIntegration.refresh_token,
         calendarIntegration.expiry_date
       );
+      console.log('accessToken:', accessToken);
+      console.log('calendarType:', calendarType);
 
       // Eliminar según el tipo de calendario
       switch (calendarType) {
@@ -377,19 +382,50 @@ export const cancelMeetingService = async (meetingId: string) => {
           break;
 
         case IntegrationAppTypeEnum.ZOOM_MEETING:
-          // Cancelar meeting de Zoom
-          const response = await fetch(`https://api.zoom.us/v2/meetings/${meeting.calendarEventId}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (!response.ok) {
-            throw new BadRequestException('Failed to delete Zoom meeting');
+          if (!accessToken) {
+            throw new BadRequestException("Failed to get valid Zoom access token");
           }
+          console.log('Deleting Zoom meeting with ID:', meeting.calendarEventId);
+          // 🆕 USAR FUNCIÓN MEJORADA CON VALIDACIÓN DE SCOPES
+          const deleteResult = await deleteZoomMeetingWithValidation(
+            accessToken,
+            meeting.calendarEventId
+          );
+          // Cancelar meeting de Zoom
+
+          if (!deleteResult.success) {
+            if (deleteResult.needsReauth) {
+              // 🆕 CASO ESPECIAL: Falta scope, sugerir reautorización
+              const reauthUrl = buildZoomReauthUrl(
+                zoomOAuth2Client.clientId,
+                zoomOAuth2Client.redirectUri,
+                meeting.event.user.id
+              );
+
+              throw new BadRequestException(
+                `Missing required permissions for Zoom. User needs to reauthorize: ${reauthUrl}`
+              );
+            } else {
+              throw new BadRequestException(
+                `Failed to delete Zoom meeting: ${deleteResult.error}`
+              );
+            }
+          }
+
+          console.log('✅ Zoom meeting deleted successfully');
           break;
+        // const response = await fetch(`https://api.zoom.us/v2/meetings/${meeting.calendarEventId}`, {
+        //   method: 'DELETE',
+        //   headers: {
+        //     'Authorization': `Bearer ${accessToken}`,
+        //     'Content-Type': 'application/json'
+        //   }
+        // });
+
+        // if (!response.ok) {
+        //   throw new BadRequestException('Failed to delete Zoom meeting');
+        // }
+        // break;
         default:
           throw new BadRequestException(
             `Unsupported calendar provider: ${calendarType}`
