@@ -24,6 +24,15 @@ export class CreateEventDto {
   @IsEnum(EventLocationEnumType)
   @IsNotEmpty()
   locationType: EventLocationEnumType;
+
+  // ✅ CAMPOS DE CALENDARIO CORREGIDOS
+  @IsOptional()
+  @IsString()
+  calendar_id?: string;     // ✅ Opcional, puede ser undefined (no null)
+
+  @IsOptional()
+  @IsString()
+  calendar_name?: string;   // ✅ Opcional, puede ser undefined (no null)
 }
 
 export class EventIdDTO {

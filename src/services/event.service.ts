@@ -10,7 +10,10 @@ import { slugify } from "../utils/helper";
 import { Meeting } from "../database/entities/meeting.entity";
 import { MeetingStatus } from "../enums/meeting.enum";
 import { cancelMeetingService } from "./meeting.service"; // Importar servicio de cancelación de reuniones
-
+import { 
+  Integration, 
+  IntegrationAppTypeEnum 
+} from "../database/entities/integration.entity";
 
 /**
  * SERVICIO PRINCIPAL: Crear nuevo evento
@@ -26,42 +29,154 @@ import { cancelMeetingService } from "./meeting.service"; // Importar servicio d
  * 4. Persistir en base de datos
  * 5. Retornar evento completo
  */
+// export const createEventService = async (
+//   userId: string,
+//   createEventDto: CreateEventDto
+// ) => {
+
+//   console.log('------------------------------------------------------------');
+//   console.log("Creating event for user:", userId, createEventDto);
+//   console.log('------------------------------------------------------------');
+//   const eventRepository = AppDataSource.getRepository(Event);
+//   // console.log("Event repository initialized", eventRepository.metadata);
+
+//   // VALIDACIÓN: Verificar que el tipo de ubicación sea válido
+//   // EventLocationEnumType contiene valores como: "ONLINE", "IN_PERSON", "PHONE", etc.
+//   if (
+//     !Object.values(EventLocationEnumType)?.includes(createEventDto.locationType)
+//   ) {
+//     throw new BadRequestException("Invalid location type");
+//   }
+
+//     // ✅ NUEVO: Manejar calendar_id para todas las plataformas
+//   let finalCalendarId: string | null = null;
+//   let finalCalendarName: string | null = null;
+
+//   // GENERACIÓN DE SLUG: Convertir título a URL amigable
+//   // Ejemplo: "Consultoría de Marketing" → "consultoria-marketing"
+//   // slugify() remueve acentos, espacios, caracteres especiales
+//   const slug = slugify(createEventDto.title);
+//   // console.log("Generated slug:", slug);
+
+//   // CREACIÓN DE ENTIDAD: Combinar DTO + datos generados + relación
+//   const event = eventRepository.create({
+//     ...createEventDto,        // Spread de todos los campos del DTO
+//     slug,                     // Slug generado automáticamente
+//     user: { id: userId },     // Relación con el usuario propietario
+//     calendar_id: finalCalendarId,      // 🔥 CALENDARIO ESPECÍFICO
+//     calendar_name: finalCalendarName,  // 🔥 NOMBRE DEL CALENDARIO
+//   });
+
+//   // PERSISTENCIA: Guardar en base de datos
+//   await eventRepository.save(event);
+//     console.log("✅ Event created successfully:", {
+//     eventId: event.id,
+//     title: event.title,
+//     locationType: event.locationType,
+//     calendarId: event.calendar_id,
+//     calendarName: event.calendar_name,
+//     userSelected: !!createEventDto.calendar_id
+//   });
+//   // RETORNO: Evento completo con ID generado
+//   return event;
+// };
+
+/**
+ * SERVICIO PRINCIPAL: Crear nuevo evento con calendario específico
+ * 
+ * @param userId - ID del usuario propietario del evento
+ * @param createEventDto - DTO con datos del evento (title, description, duration, etc.)
+ * @returns Event - Evento creado y persistido
+ */
 export const createEventService = async (
   userId: string,
   createEventDto: CreateEventDto
 ) => {
-
   console.log('------------------------------------------------------------');
   console.log("Creating event for user:", userId, createEventDto);
   console.log('------------------------------------------------------------');
+
   const eventRepository = AppDataSource.getRepository(Event);
-  // console.log("Event repository initialized", eventRepository.metadata);
 
   // VALIDACIÓN: Verificar que el tipo de ubicación sea válido
-  // EventLocationEnumType contiene valores como: "ONLINE", "IN_PERSON", "PHONE", etc.
-  if (
-    !Object.values(EventLocationEnumType)?.includes(createEventDto.locationType)
-  ) {
+  if (!Object.values(EventLocationEnumType)?.includes(createEventDto.locationType)) {
     throw new BadRequestException("Invalid location type");
   }
 
-  // GENERACIÓN DE SLUG: Convertir título a URL amigable
-  // Ejemplo: "Consultoría de Marketing" → "consultoria-marketing"
-  // slugify() remueve acentos, espacios, caracteres especiales
-  const slug = slugify(createEventDto.title);
-  // console.log("Generated slug:", slug);
+  // ✅ LÓGICA PARA DETERMINAR CALENDARIO A USAR
+  let finalCalendarId: string = 'primary'; // Default fallback
+  let finalCalendarName: string | null = null;
 
-  // CREACIÓN DE ENTIDAD: Combinar DTO + datos generados + relación
+  // Si el usuario seleccionó un calendario específico, usarlo
+  if (createEventDto.calendar_id && createEventDto.calendar_id.trim() !== '') {
+    console.log("📅 Using user-selected calendar:", createEventDto.calendar_id);
+    finalCalendarId = createEventDto.calendar_id;
+    finalCalendarName = createEventDto.calendar_name || createEventDto.calendar_id;
+  } else {
+    // No se seleccionó calendario específico - usar comportamiento por defecto
+    console.log("📅 No specific calendar selected, determining default...");
+
+    if (createEventDto.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR) {
+      // Para Google Meet, intentar obtener el calendario de la integración
+      try {
+        const integrationRepository = AppDataSource.getRepository(Integration);
+        const googleIntegration = await integrationRepository.findOne({
+          where: {
+            userId: userId,
+            app_type: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
+            isConnected: true
+          }
+        });
+
+        if (googleIntegration && googleIntegration.calendar_id) {
+          finalCalendarId = googleIntegration.calendar_id;
+          finalCalendarName = googleIntegration.calendar_name || 'Google Calendar';
+          console.log("📅 Using Google integration calendar:", finalCalendarId);
+        } else {
+          finalCalendarId = 'primary';
+          finalCalendarName = 'Primary Calendar';
+          console.log("📅 No Google integration found, using primary calendar");
+        }
+      } catch (error) {
+        console.warn("⚠️ Error fetching Google integration, using primary calendar:", error);
+        finalCalendarId = 'primary';
+        finalCalendarName = 'Primary Calendar';
+      }
+    } else {
+      // Para Zoom y otras plataformas, usar primary calendar por defecto
+      finalCalendarId = 'primary';
+      finalCalendarName = 'Primary Calendar';
+      console.log("📅 Using primary calendar for platform:", createEventDto.locationType);
+    }
+  }
+
+  // GENERACIÓN DE SLUG: Convertir título a URL amigable
+  const slug = slugify(createEventDto.title);
+
+  // ✅ CREACIÓN DE ENTIDAD: Combinar DTO + datos generados + relación + calendario
   const event = eventRepository.create({
-    ...createEventDto,        // Spread de todos los campos del DTO
-    slug,                     // Slug generado automáticamente
-    user: { id: userId },     // Relación con el usuario propietario
+    title: createEventDto.title,
+    description: createEventDto.description,
+    duration: createEventDto.duration,
+    locationType: createEventDto.locationType,
+    slug,                           // Slug generado automáticamente
+    user: { id: userId },           // Relación con el usuario propietario
+    calendar_id: finalCalendarId,   // 🔥 CALENDARIO ESPECÍFICO (siempre tiene valor)
+    calendar_name: finalCalendarName, // 🔥 NOMBRE DEL CALENDARIO
   });
 
   // PERSISTENCIA: Guardar en base de datos
   await eventRepository.save(event);
-  console.log("Event created:", event);
-  // RETORNO: Evento completo con ID generado
+
+  console.log("✅ Event created successfully:", {
+    eventId: event.id,
+    title: event.title,
+    locationType: event.locationType,
+    calendarId: event.calendar_id,
+    calendarName: event.calendar_name,
+    userSelected: !!createEventDto.calendar_id
+  });
+
   return event;
 };
 

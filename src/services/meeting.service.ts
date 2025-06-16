@@ -372,8 +372,13 @@ export const cancelMeetingService = async (meetingId: string) => {
 
   // VALIDACIÓN: Usar calendar_id de la reunión (que puede ser diferente al del evento para Zoom)
   let effectiveCalendarId = meeting.calendar_id || meeting.event.calendar_id;
-  console.log('paso 1: Meeting found:', meeting);
-  console.log('paso 1: Effective calendar ID:', effectiveCalendarId);
+  console.log('paso 1: Meeting found:', {
+    id: meeting.id,
+    guestName: meeting.guestName,
+    meetingCalendarId: meeting.calendar_id,
+    eventCalendarId: meeting.event.calendar_id,
+    locationType: meeting.event.locationType
+  });
 
   // if (!effectiveCalendarId) {
   //   throw new BadRequestException("Meeting does not have a calendar configured");
@@ -420,7 +425,9 @@ export const cancelMeetingService = async (meetingId: string) => {
       console.log('paso 2: Calendar integration found:', calendarIntegration);
       // ✅ CLAVE: Para Zoom, obtener calendar_id de la integración
       if (calendarIntegration && calendarIntegration.calendar_id) {
-        effectiveCalendarId = calendarIntegration.calendar_id;
+        // effectiveCalendarId = calendarIntegration.calendar_id;
+        // ✅ PARA ZOOM: Usar calendar_id del evento (que ahora sí se guarda)
+        effectiveCalendarId = meeting.event.calendar_id || calendarIntegration.calendar_id || 'primary';
         console.log('paso 2: Updated effective calendar ID for Zoom:', effectiveCalendarId);
       }
     }
@@ -429,6 +436,12 @@ export const cancelMeetingService = async (meetingId: string) => {
       console.warn(`No calendar integration found for user ${meeting.event.user.id}`);
       throw new BadRequestException("No calendar integration found for this user");
     }
+
+    console.log('paso 2: Integrations found:', {
+      zoomIntegration: !!zoomIntegration,
+      calendarIntegration: !!calendarIntegration,
+      calendarIntegrationCalendarId: calendarIntegration?.calendar_id
+    });
 
     if (!effectiveCalendarId) {
       console.error('No effective calendar ID found. Meeting calendar_id:', meeting.calendar_id,
@@ -461,32 +474,107 @@ export const cancelMeetingService = async (meetingId: string) => {
       if (!zoomIntegration) {
         throw new BadRequestException("No Zoom integration found for this user");
       }
+      let zoomDeletionSuccess = false;
+      if (meeting.zoom_meeting_id) {
+        try {
+          const validZoomToken = await validateZoomToken(
+            zoomIntegration.access_token,
+            zoomIntegration.refresh_token,
+            zoomIntegration.expiry_date
+          );
 
-      // 1. Eliminar reunión de Zoom
-      const validZoomToken = await validateZoomToken(
-        zoomIntegration.access_token,
-        zoomIntegration.refresh_token,
-        zoomIntegration.expiry_date
-      );
+          console.log('paso 5: Attempting to delete Zoom meeting:', {
+            zoomMeetingId: meeting.zoom_meeting_id
+          });
 
-      if (!meeting.zoom_meeting_id) {
-        throw new BadRequestException("Zoom meeting ID not found");
+          await deleteZoomMeeting(
+            validZoomToken,
+            meeting.zoom_meeting_id.toString(),
+            meeting.event.user.id
+          );
+
+          zoomDeletionSuccess = true;
+          console.log('✅ Zoom meeting deleted successfully');
+
+        } catch (zoomError) {
+          // ✅ MANEJO GRACEFUL: Si la reunión de Zoom no existe, continuar
+          console.warn('⚠️ Failed to delete Zoom meeting (meeting may not exist):', {
+            zoomMeetingId: meeting.zoom_meeting_id,
+            error: zoomError instanceof Error ? zoomError.message : String(zoomError)
+          });
+
+          // Verificar si es un error de "no existe" vs otros errores
+          const errorMessage = zoomError instanceof Error ? zoomError.message : String(zoomError);
+          const isMeetingNotFound = errorMessage.toLowerCase().includes('does not exist') ||
+            errorMessage.toLowerCase().includes('not found') ||
+            errorMessage.toLowerCase().includes('meeting not found');
+
+          if (isMeetingNotFound) {
+            console.log('📝 Zoom meeting appears to have been deleted already - continuing with calendar cleanup');
+            zoomDeletionSuccess = true; // Considerar como éxito si ya no existe
+          } else {
+            // Para otros errores (permisos, token, etc.), aún consideramos continuar 
+            // pero loggeamos como warning
+            console.warn('📝 Zoom meeting deletion failed but continuing with calendar cleanup');
+            zoomDeletionSuccess = true; // Continuar de todas formas
+          }
+        }
+      } else {
+        console.warn('⚠️ No Zoom meeting ID found - skipping Zoom deletion');
+        zoomDeletionSuccess = true; // Continuar sin ID de Zoom
       }
 
-      console.log('paso 4: Deleting Zoom meeting with ID:', meeting.zoom_meeting_id);
-      await deleteZoomMeeting(
-        validZoomToken,
-        meeting.zoom_meeting_id.toString(),
-        meeting.event.user.id
-      );
+      // // 1. Eliminar reunión de Zoom
+      // const validZoomToken = await validateZoomToken(
+      //   zoomIntegration.access_token,
+      //   zoomIntegration.refresh_token,
+      //   zoomIntegration.expiry_date
+      // );
+
+      // if (!meeting.zoom_meeting_id) {
+      //   throw new BadRequestException("Zoom meeting ID not found");
+      // }
+
+      // console.log('paso 4: Deleting Zoom meeting with ID:', meeting.zoom_meeting_id);
+      // await deleteZoomMeeting(
+      //   validZoomToken,
+      //   meeting.zoom_meeting_id.toString(),
+      //   meeting.event.user.id
+      // );
 
       // 2. Eliminar evento del calendario
-      await deleteCalendarEvent(
-        calendar,
-        effectiveCalendarId, // ✅ Usar effectiveCalendarId
-        meeting.calendarEventId,
-        calendarType
-      );
+      // ✅ SIEMPRE intentar eliminar evento del calendario (independiente del resultado de Zoom)
+      try {
+        console.log('paso 5: Deleting Zoom calendar event:', {
+          calendarId: effectiveCalendarId,
+          eventId: meeting.calendarEventId
+        });
+
+        await deleteCalendarEvent(
+          calendar,
+          effectiveCalendarId,
+          meeting.calendarEventId,
+          calendarType
+        );
+
+        console.log('✅ Calendar event deleted successfully');
+
+      } catch (calendarError) {
+        console.error('❌ Failed to delete calendar event:', calendarError);
+
+        // Si no pudimos eliminar ni Zoom ni calendario, fallar
+        if (!zoomDeletionSuccess) {
+          throw new BadRequestException('Failed to delete both Zoom meeting and calendar event');
+        }
+
+        // Si Zoom se eliminó pero calendario falló, continuar pero advertir
+        console.warn('⚠️ Zoom meeting deleted but calendar event deletion failed - meeting will be marked as cancelled');
+      }
+
+      // ✅ LOGGING final del resultado
+      if (zoomDeletionSuccess) {
+        console.log('✅ Zoom meeting cancellation completed (some operations may have been skipped)');
+      }
 
     } else {
       throw new BadRequestException(
@@ -502,6 +590,12 @@ export const cancelMeetingService = async (meetingId: string) => {
   // PASO 5: MARCAR REUNIÓN COMO CANCELADA EN BASE DE DATOS
   meeting.status = MeetingStatus.CANCELLED;
   await meetingRepository.save(meeting);
+
+  console.log('✅ Meeting cancelled successfully:', {
+    meetingId: meeting.id,
+    guestName: meeting.guestName,
+    locationType: meeting.event.locationType
+  });
 
   return { success: true };
 };

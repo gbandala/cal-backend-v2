@@ -39,21 +39,22 @@ export class Event {
   @Column({ type: "enum", enum: EventLocationEnumType })
   locationType: EventLocationEnumType;
 
-    // *** NUEVOS CAMPOS PARA CALENDARIOS ESPECÍFICOS ***
+  // ✅ CAMPO CALENDAR_ID CORREGIDO
   @Column({ 
     name: 'calendar_id', 
     type: 'varchar', 
-    default: 'primary',
-    nullable: false 
+    nullable: false,        // ✅ No nullable
+    default: 'primary'      // ✅ Default value 
   })
   calendar_id: string;
 
+  // ✅ CAMPO CALENDAR_NAME CORREGIDO  
   @Column({ 
     name: 'calendar_name', 
     type: 'varchar', 
-    nullable: true 
+    nullable: true          // ✅ Puede ser null
   })
-  calendar_name?: string;
+  calendar_name?: string | null;
   // *** FIN NUEVOS CAMPOS ***
 
 
