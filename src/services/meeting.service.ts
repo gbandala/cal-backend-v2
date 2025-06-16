@@ -24,15 +24,15 @@ import {
 import {
   Integration,
   IntegrationAppTypeEnum,
-  IntegrationCategoryEnum,
 } from "../database/entities/integration.entity";
 import { BadRequestException, NotFoundException } from "../utils/app-error";
 import { validateGoogleToken, validateZoomToken } from "./integration.service";
 import { googleOAuth2Client } from "../config/oauth.config";
 import { google } from "googleapis";
-import { toZonedTime, formatInTimeZone, format } from "date-fns-tz";
+// import { toZonedTime, formatInTimeZone, format } from "date-fns-tz";
 import { deleteZoomMeetingWithValidation, buildZoomReauthUrl } from '../config/zoom-token-helpers';
 import { zoomOAuth2Client } from '../config/oauth.config';
+import { create } from "domain";
 
 
 /**
@@ -84,7 +84,7 @@ export const getUserMeetingsService = async (
   // console.log("Meetings found:", meetings);
   // return meetings || []; // Retornar array vacío si no hay resultados
 
-  console.log("Meetings found (before date processing):", meetings);
+  // console.log("Meetings found (before date processing):", meetings);
 
   // PROCESAR FECHAS: Remover 'Z' para que se interpreten como horario local
   const processedMeetings = meetings.map(meeting => {
@@ -104,43 +104,40 @@ export const getUserMeetingsService = async (
     return processedMeeting;
   });
 
-  console.log("Meetings found (after date processing):", processedMeetings);
+  // console.log("Meetings found (after date processing):", processedMeetings);
   return processedMeetings || []; // Retornar array vacío si no hay resultados
 };
 
 /**
  * CREAR RESERVA DE REUNIÓN PARA INVITADO
- * 
- * Funcionalidad principal:
- * 1. Valida que el evento existe y es público
- * 2. Verifica integración de video conferencia del organizador
- * 3. Crea evento en Google Calendar con Google Meet
- * 4. Guarda la reunión en base de datos con enlace de Meet
- * 
- * @param createMeetingDto - Datos de la reunión a crear
- * @returns Objeto con meetLink y datos de la reunión creada
+ *
+ * Funcionalidad:
+ * - Crea una reunión para un invitado con integración de Google Calendar/Meet o Zoom
+ * - Valida que el evento exista y sea reservable
+ * - Crea el evento en el calendario del organizador
+ * - Guarda la reunión en la base de datos
+ *
+ * @param createMeetingDto - DTO con los datos necesarios para crear la reunión
+ * @param timezone - Zona horaria del evento
+ * @returns Objeto con detalles de la reunión creada
  */
 export const createMeetBookingForGuestService = async (
   createMeetingDto: CreateMeetingDto,
   timezone: string
 ) => {
-
   // Extraer y convertir datos del DTO
   const { eventId, guestEmail, guestName, additionalInfo } = createMeetingDto;
   const startTime = new Date(createMeetingDto.startTime);
   const endTime = new Date(createMeetingDto.endTime);
-  // console.log('---------------------------------------------------------------');
-  // console.log('startTime:', startTime);
-  // console.log('endTime:', endTime);
-  // console.log('timezone startTime:', timezone, formatInTimeZone(startTime, timezone, 'yyyy-MM-dd HH:mm'));
-  // console.log('timezone endTime:', timezone, formatInTimeZone(endTime, timezone, 'yyyy-MM-dd HH:mm'));
-  // console.log('---------------------------------------------------------------');
 
   // Repositorios necesarios
   const eventRepository = AppDataSource.getRepository(Event);
-
   const integrationRepository = AppDataSource.getRepository(Integration);
   const meetingRepository = AppDataSource.getRepository(Meeting);
+
+  console.log('------------------------------------------------------------');
+  console.log('createMeetBookingForGuestService called with:', createMeetingDto);
+  console.log('------------------------------------------------------------');
 
   // PASO 1: VALIDAR QUE EL EVENTO EXISTE Y ES RESERVABLE
   const event = await eventRepository.findOne({
@@ -152,33 +149,69 @@ export const createMeetBookingForGuestService = async (
     console.log("Event not found:", eventId);
     throw new NotFoundException("Event not found");
   }
-
-  // 🆕 VALIDAR QUE EL EVENTO TENGA CALENDARIO CONFIGURADO
-  // if (!event.calendar_id) {
-  //   throw new BadRequestException("Event does not have a calendar configured");
-  // }
-
+  console.log('paso 1: Event found:', event);
   // PASO 2: VALIDAR TIPO DE UBICACIÓN/INTEGRACIÓN
   if (!Object.values(EventLocationEnumType).includes(event.locationType)) {
     console.log("Invalid location type:", event.locationType);
     throw new BadRequestException("Invalid location type");
   }
-  console.log("Event location type:", event.locationType);
-  console.log("Event user:", event);
 
-  // PASO 3: VERIFICAR INTEGRACIÓN DE VIDEO CONFERENCIA DEL ORGANIZADOR
-  const meetIntegration = await integrationRepository.findOne({
-    where: {
-      user: { id: event.user.id },
-      app_type: IntegrationAppTypeEnum[event.locationType], // Buscar integración correspondiente
-    },
-  });
+  // VALIDACIÓN ESPECIAL: Para Zoom, el evento puede no tener calendar_id por el constraint de BD
+  // En este caso, usaremos el calendar_id de la integración de Google Calendar
+  let effectiveCalendarId = event.calendar_id;
 
-  console.log("Meet integration found:", meetIntegration);
+  if (!effectiveCalendarId && event.locationType === EventLocationEnumType.ZOOM_MEETING) {
+    console.log("Zoom event without calendar_id, will use integration calendar_id");
+    // Para Zoom, obtendremos el calendar_id de la integración más adelante
+  } else if (!effectiveCalendarId) {
+    throw new BadRequestException("Event does not have a calendar configured");
+  }
 
+  console.log('paso 2: Location type is valid:', event.locationType);
+  // PASO 3: BUSCAR INTEGRACIONES NECESARIAS
+  let meetIntegration: Integration | null = null;
+  let calendarIntegration: Integration | null = null;
+
+  if (event.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR) {
+    // Para Google Meet: una sola integración sirve para ambos (reunión y calendario)
+    meetIntegration = await integrationRepository.findOne({
+      where: {
+        user: { id: event.user.id },
+        app_type: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
+      },
+    });
+    calendarIntegration = meetIntegration; // Misma integración
+
+  } else if (event.locationType === EventLocationEnumType.ZOOM_MEETING) {
+    // Para Zoom: necesitamos DOS integraciones separadas
+    // console.log('paso 3:meet Integration y calendarIntegration se buscarán por separado');
+    // 1. Integración de Zoom (para crear la reunión)
+    meetIntegration = await integrationRepository.findOne({
+      where: {
+        user: { id: event.user.id },
+        app_type: IntegrationAppTypeEnum.ZOOM_MEETING,
+      },
+    });
+    console.log('paso 3:meet Integration:', meetIntegration);
+    // 2. Integración de Google Calendar (para crear el evento de calendario)
+    calendarIntegration = await integrationRepository.findOne({
+      where: {
+        user: { id: event.user.id },
+        app_type: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
+      },
+    });
+    console.log('paso 3:calendar Integration:', calendarIntegration);
+  }
+
+  // VALIDAR QUE TENEMOS LAS INTEGRACIONES NECESARIAS
   if (!meetIntegration) {
-    console.log("No video conferencing integration found for user:", event.user.id);
-    throw new BadRequestException("No video conferencing integration found");
+    console.log("No meeting integration found for user:", event.user.id);
+    throw new BadRequestException("No meeting integration found");
+  }
+
+  if (!calendarIntegration) {
+    console.log("No calendar integration found for user:", event.user.id);
+    throw new BadRequestException("No calendar integration found. Please connect Google Calendar.");
   }
 
   // Variables para almacenar datos del calendario/meet
@@ -189,76 +222,56 @@ export const createMeetBookingForGuestService = async (
   let zoomJoinUrl: string | undefined = undefined;
   let zoomStartUrl: string | undefined = undefined;
 
-  // PASO 4: CREAR EVENTO EN GOOGLE CALENDAR CON GOOGLE MEET
-  if (event.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR) {
-    if (!event.calendar_id) {
-      throw new BadRequestException("Event does not have a calendar configured");
+  // PASO 4: OBTENER CLIENTE DE CALENDARIO (siempre Google Calendar)
+  const { calendar, calendarType } = await getGoogleCalendarClient(
+    calendarIntegration.access_token,
+    calendarIntegration.refresh_token,
+    calendarIntegration.expiry_date
+  );
+
+  // console.log('paso 4: Google Calendar client obtained:', calendar);
+  // RESOLVER CALENDAR_ID EFECTIVO
+  // Para Zoom sin calendar_id, usar el de la integración de Google Calendar
+  if (!effectiveCalendarId && event.locationType === EventLocationEnumType.ZOOM_MEETING) {
+    if (!calendarIntegration.calendar_id) {
+      throw new BadRequestException("No calendar configured in Google Calendar integration. Please configure a default calendar.");
     }
-    // Obtener cliente autenticado de Google Calendar
-    const { calendarType, calendar } = await getCalendarClient(
-      meetIntegration.app_type,
-      meetIntegration.access_token,
-      meetIntegration.refresh_token,
-      meetIntegration.expiry_date
+    effectiveCalendarId = calendarIntegration.calendar_id;
+    console.log("Using calendar_id from Google Calendar integration for Zoom event:", effectiveCalendarId);
+  }
+
+  // Datos comunes para la creación del evento de calendario
+  const calendarEventData = {
+    title: event.title,
+    guestName,
+    guestEmail,
+    organizerEmail: event.user.email,
+    additionalInfo,
+    startTime,
+    endTime,
+    timezone,
+    eventId: event.id,
+  };
+
+  // PASO 5: CREAR EVENTO SEGÚN EL TIPO DE UBICACIÓN
+  if (event.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR) {
+    // Crear evento en Google Calendar con Google Meet automático
+    const calendarResult = await createCalendarEvent(
+      calendar,
+      effectiveCalendarId, // ✅ Usar effectiveCalendarId
+      {
+        ...calendarEventData,
+        includeConferenceData: true, // Incluir Google Meet automático
+      }
     );
 
-    // ✅ SOLUCIÓN SIMPLE: Interpretar la fecha como hora local
-    const formatDateForCalendar = (date: Date) => {
-      return date.toISOString().replace('Z', '');
-    };
+    console.log('paso 5: Google Calendar event created:', calendarResult);
+    meetLink = calendarResult.hangoutLink!;
+    calendarEventId = calendarResult.calendarEventId;
+    calendarAppType = IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR; // Tipo de calendario para Google Meet
 
-    const formattedStart = formatDateForCalendar(startTime);
-    const formattedEnd = formatDateForCalendar(endTime);
-
-    console.log('---------------------------------------------------------------');
-    console.log('startTime:', startTime);
-    console.log('endTime:', endTime);
-    console.log('timezone startTime:', timezone, formattedStart);
-    console.log('timezone endTime:', timezone, formattedEnd);
-    console.log('---------------------------------------------------------------');
-
-    // ✅ VERIFICAR QUE CALENDAR NO SEA NULL PARA GOOGLE
-    if (!calendar) {
-      throw new BadRequestException("Failed to initialize Google Calendar client");
-    }
-    // Crear evento en Google Calendar con Google Meet automático
-    const response = await calendar.events.insert({
-      calendarId: event.calendar_id, // ← 🎯 CAMBIO: usar calendar específico
-      conferenceDataVersion: 1,
-      requestBody: {
-        summary: `${guestName} - ${event.title}`,
-        description: additionalInfo,
-        start: {
-          dateTime: formattedStart,
-          timeZone: timezone, // Usar zona horaria del invitado
-        },
-        end: {
-          dateTime: formattedEnd,
-          timeZone: timezone, // Usar zona horaria del invitado
-        },
-        // start: { dateTime: startTime.toLocaleDateString() + 'T' + startTime.toLocaleTimeString() },
-        // end: { dateTime: endTime.toLocaleDateString() + 'T' + endTime.toLocaleTimeString() },
-        // end: {dateTime:endTime},
-        attendees: [
-          { email: guestEmail },
-          { email: event.user.email }
-        ],
-        conferenceData: {
-          createRequest: {
-            requestId: `${event.id}-${Date.now()}`,
-          },
-        },
-      },
-    });
-    console.log("Google Calendar event created:", response.data);
-
-    // Extraer datos importantes de la respuesta
-    meetLink = response.data.hangoutLink!; // Enlace de Google Meet
-    calendarEventId = response.data.id!; // ID del evento en Google Calendar
-    calendarAppType = calendarType; // Tipo de calendario usado
   } else if (event.locationType === EventLocationEnumType.ZOOM_MEETING) {
-    console.log("Creating Zoom meeting...");
-    // Crear meeting de Zoom
+    // Primero crear meeting de Zoom
     const { meetingData } = await createZoomMeeting(
       meetIntegration.access_token,
       meetIntegration.refresh_token,
@@ -266,7 +279,7 @@ export const createMeetBookingForGuestService = async (
       {
         topic: `${guestName} - ${event.title}`,
         start_time: startTime.toISOString(),
-        duration: Math.ceil((endTime.getTime() - startTime.getTime()) / (1000 * 60)), // duración en minutos
+        duration: Math.ceil((endTime.getTime() - startTime.getTime()) / (1000 * 60)),
         timezone: timezone,
         agenda: additionalInfo,
         settings: {
@@ -277,18 +290,31 @@ export const createMeetBookingForGuestService = async (
         }
       }
     );
-    console.log("Zoom meeting created:", meetingData);
+    console.log('paso 5: Zoom meeting created:', meetingData);
+
+    // Luego crear evento en calendario (sin conferenceData automático)
+    const calendarResult = await createCalendarEvent(
+      calendar,
+      effectiveCalendarId,
+      {
+        ...calendarEventData,
+        includeConferenceData: false, // No incluir Google Meet para Zoom
+        additionalInfo: `${additionalInfo}\n\nUnirse a Zoom: ${meetingData.join_url}`, // Incluir link de Zoom en descripción
+      }
+    );
+    console.log('paso 5: Calendar event created for Zoom meeting:', calendarResult);
 
     meetLink = meetingData.join_url;
-    calendarEventId = meetingData.id.toString();
-    calendarAppType = IntegrationAppTypeEnum.ZOOM_MEETING;
+    calendarEventId = calendarResult.calendarEventId; // ID del evento de calendario
+    calendarAppType = IntegrationAppTypeEnum.ZOOM_MEETING; // Tipo de calendario para Zoom
 
-    zoomMeetingId = meetingData.id;
+    zoomMeetingId = meetingData.id; // ID de Zoom va en campo separado
     zoomJoinUrl = meetingData.join_url;
-    zoomStartUrl = meetingData.start_url; // ← Ahora disponible
+    zoomStartUrl = meetingData.start_url;
   }
 
-  // PASO 5: GUARDAR REUNIÓN EN BASE DE DATOS
+  // PASO 6: GUARDAR REUNIÓN EN BASE DE DATOS
+  // PASO 6: GUARDAR REUNIÓN EN BASE DE DATOS
   const meeting = meetingRepository.create({
     event: event,
     user: event.user, // Organizador (heredado del evento)
@@ -297,222 +323,199 @@ export const createMeetBookingForGuestService = async (
     additionalInfo,
     startTime,
     endTime,
-    meetLink: meetLink, // Enlace de Google Meet generado
-    calendarEventId: calendarEventId, // Para cancelaciones futuras
-    calendarAppType: calendarAppType, // Para saber qué API usar
+    meetLink: meetLink,
+    calendarEventId: calendarEventId,
+    calendarAppType: calendarAppType,
+    // ✅ AJUSTE PARA CONSTRAINT: calendar_id solo para Google Meet
     ...(event.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR && {
-      calendar_id: event.calendar_id
+      calendar_id: effectiveCalendarId,
     }),
+    // ✅ AJUSTE PARA CONSTRAINT: campos Zoom solo para Zoom
     ...(event.locationType === EventLocationEnumType.ZOOM_MEETING && {
       zoom_meeting_id: zoomMeetingId,
       zoom_join_url: zoomJoinUrl,
-      zoom_start_url: zoomStartUrl
+      zoom_start_url: zoomStartUrl,
+      // calendar_id debe ser NULL para Zoom según constraint
     })
-
   });
-  console.log("Saved meeting:", meeting);
 
+  console.log('paso 6: Meeting entity created:', meeting);
   await meetingRepository.save(meeting);
 
   // Retornar datos importantes para el frontend
   return {
-    meetLink, // Para que el invitado pueda unirse
-    meeting, // Datos completos de la reunión creada
+    meetLink,
+    meeting,
   };
 };
 
+
 /**
- * CANCELAR REUNIÓN Y ELIMINAR DE CALENDARIO
- * 
- * Funcionalidad:
- * 1. Busca la reunión y valida que existe
- * 2. Encuentra la integración de calendario del organizador
- * 3. Elimina el evento del calendario externo (Google Calendar)
- * 4. Marca la reunión como cancelada en base de datos
- * 
- * @param meetingId - ID de la reunión a cancelar
+ * cancelMeetingService
+ * @param meetingId  - ID de la reunión a cancelar
  * @returns Objeto indicando éxito de la operación
  */
 export const cancelMeetingService = async (meetingId: string) => {
   const meetingRepository = AppDataSource.getRepository(Meeting);
   const integrationRepository = AppDataSource.getRepository(Integration);
+  console.log('------------------------------------------------------------');
+  console.log('cancelMeetingService called with meetingId:', meetingId);
+  console.log('------------------------------------------------------------');
 
   // PASO 1: BUSCAR REUNIÓN CON DATOS DEL EVENTO Y USUARIO
   const meeting = await meetingRepository.findOne({
     where: { id: meetingId },
-    relations: ["event", "event.user"], // Necesitamos datos del organizador
+    relations: ["event", "event.user"],
   });
 
-  console.log("Meeting found to cancel:", meeting);
   if (!meeting) throw new NotFoundException("Meeting not found");
 
+  // VALIDACIÓN: Usar calendar_id de la reunión (que puede ser diferente al del evento para Zoom)
+  let effectiveCalendarId = meeting.calendar_id || meeting.event.calendar_id;
+  console.log('paso 1: Meeting found:', meeting);
+  console.log('paso 1: Effective calendar ID:', effectiveCalendarId);
+
+  // if (!effectiveCalendarId) {
+  //   throw new BadRequestException("Meeting does not have a calendar configured");
+  // }
+
   try {
-    // PASO 2: BUSCAR INTEGRACIÓN DE CALENDARIO DEL ORGANIZADOR ESPECÍFICO
-    const calendarIntegration = await integrationRepository.findOne({
-      where: {
-        user: { id: meeting.event.user.id }, // ← 🎯 AGREGAR: Filtrar por usuario específico
-        app_type: IntegrationAppTypeEnum[
-          meeting.calendarAppType as keyof typeof IntegrationAppTypeEnum
-        ],
-      },
-    });
+    // PASO 2: BUSCAR INTEGRACIONES NECESARIAS
+    let zoomIntegration: Integration | null = null;
+    let calendarIntegration: Integration | null = null;
+    // let effectiveCalendarId: string | null = null;
 
-    // PASO 3: ELIMINAR EVENTO DEL CALENDARIO EXTERNO
-    if (calendarIntegration) {
-      // Obtener cliente autenticado
-      const { calendar, calendarType, accessToken } = await getCalendarClient(
-        calendarIntegration.app_type,
-        calendarIntegration.access_token,
-        calendarIntegration.refresh_token,
-        calendarIntegration.expiry_date
-      );
-      console.log('accessToken:', accessToken);
-      console.log('calendarType:', calendarType);
+    if (meeting.event.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR) {
+      // Para Google Meet: una sola integración
+      calendarIntegration = await integrationRepository.findOne({
+        where: {
+          user: { id: meeting.event.user.id },
+          app_type: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
+        },
+      });
 
-      // Eliminar según el tipo de calendario
-      switch (calendarType) {
-        case IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR:
-          if (!calendar) {
-            throw new BadRequestException("Failed to initialize Google Calendar client");
-          }
-          await calendar.events.delete({
-            calendarId: meeting.event.calendar_id,
-            eventId: meeting.calendarEventId,
-          });
-          break;
+      // Para Google Meet, usar calendar_id de la reunión
+      // effectiveCalendarId = meeting.calendar_id ?? null;
 
-        case IntegrationAppTypeEnum.ZOOM_MEETING:
-          if (!accessToken) {
-            throw new BadRequestException("Failed to get valid Zoom access token");
-          }
-          console.log('Deleting Zoom meeting with ID:', meeting.calendarEventId);
-          // 🆕 USAR FUNCIÓN MEJORADA CON VALIDACIÓN DE SCOPES
-          const deleteResult = await deleteZoomMeetingWithValidation(
-            accessToken,
-            meeting.calendarEventId
-          );
-          // Cancelar meeting de Zoom
+    } else if (meeting.event.locationType === EventLocationEnumType.ZOOM_MEETING) {
+      // Para Zoom: necesitamos ambas integraciones
 
-          if (!deleteResult.success) {
-            if (deleteResult.needsReauth) {
-              // 🆕 CASO ESPECIAL: Falta scope, sugerir reautorización
-              const reauthUrl = buildZoomReauthUrl(
-                zoomOAuth2Client.clientId,
-                zoomOAuth2Client.redirectUri,
-                meeting.event.user.id
-              );
+      // 1. Integración de Zoom (para eliminar reunión)
+      zoomIntegration = await integrationRepository.findOne({
+        where: {
+          user: { id: meeting.event.user.id },
+          app_type: IntegrationAppTypeEnum.ZOOM_MEETING,
+        },
+      });
+      console.log('paso 2: Zoom integration found:', zoomIntegration);
 
-              throw new BadRequestException(
-                `Missing required permissions for Zoom. User needs to reauthorize: ${reauthUrl}`
-              );
-            } else {
-              throw new BadRequestException(
-                `Failed to delete Zoom meeting: ${deleteResult.error}`
-              );
-            }
-          }
+      // 2. Integración de calendario (para eliminar evento)
+      calendarIntegration = await integrationRepository.findOne({
+        where: {
+          user: { id: meeting.event.user.id },
+          app_type: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
+        },
+      });
 
-          console.log('✅ Zoom meeting deleted successfully');
-          break;
-        // const response = await fetch(`https://api.zoom.us/v2/meetings/${meeting.calendarEventId}`, {
-        //   method: 'DELETE',
-        //   headers: {
-        //     'Authorization': `Bearer ${accessToken}`,
-        //     'Content-Type': 'application/json'
-        //   }
-        // });
-
-        // if (!response.ok) {
-        //   throw new BadRequestException('Failed to delete Zoom meeting');
-        // }
-        // break;
-        default:
-          throw new BadRequestException(
-            `Unsupported calendar provider: ${calendarType}`
-          );
+      console.log('paso 2: Calendar integration found:', calendarIntegration);
+      // ✅ CLAVE: Para Zoom, obtener calendar_id de la integración
+      if (calendarIntegration && calendarIntegration.calendar_id) {
+        effectiveCalendarId = calendarIntegration.calendar_id;
+        console.log('paso 2: Updated effective calendar ID for Zoom:', effectiveCalendarId);
       }
-    } else {
-      // ← 🆕 AGREGAR: Log si no se encuentra la integración
-      console.warn(`No calendar integration found for user ${meeting.event.user.id} with app_type ${meeting.calendarAppType}`);
-      // Continuar con la cancelación en BD aunque no se pueda eliminar del calendario
     }
+
+    if (!calendarIntegration) {
+      console.warn(`No calendar integration found for user ${meeting.event.user.id}`);
+      throw new BadRequestException("No calendar integration found for this user");
+    }
+
+    if (!effectiveCalendarId) {
+      console.error('No effective calendar ID found. Meeting calendar_id:', meeting.calendar_id,
+        'Event calendar_id:', meeting.event.calendar_id,
+        'Integration calendar_id:', calendarIntegration?.calendar_id);
+      throw new BadRequestException("No calendar configured for this meeting");
+    }
+
+    // PASO 3: OBTENER CLIENTE DE CALENDAR (siempre Google Calendar)
+    const { calendar, calendarType } = await getGoogleCalendarClient(
+      calendarIntegration.access_token,
+      calendarIntegration.refresh_token,
+      calendarIntegration.expiry_date
+    );
+
+    console.log('paso 2: Final effective calendar ID:', effectiveCalendarId);
+    // PASO 4: ELIMINAR SEGÚN EL TIPO DE EVENTO
+    if (meeting.event.locationType === EventLocationEnumType.GOOGLE_MEET_AND_CALENDAR) {
+      // Para Google Meet: solo eliminar el evento del calendario
+      await deleteCalendarEvent(
+        calendar,
+        effectiveCalendarId, // ✅ Usar effectiveCalendarId
+        meeting.calendarEventId,
+        calendarType
+      );
+
+    } else if (meeting.event.locationType === EventLocationEnumType.ZOOM_MEETING) {
+      // Para Zoom: eliminar TANTO la reunión de Zoom COMO el evento de calendario
+
+      if (!zoomIntegration) {
+        throw new BadRequestException("No Zoom integration found for this user");
+      }
+
+      // 1. Eliminar reunión de Zoom
+      const validZoomToken = await validateZoomToken(
+        zoomIntegration.access_token,
+        zoomIntegration.refresh_token,
+        zoomIntegration.expiry_date
+      );
+
+      if (!meeting.zoom_meeting_id) {
+        throw new BadRequestException("Zoom meeting ID not found");
+      }
+
+      console.log('paso 4: Deleting Zoom meeting with ID:', meeting.zoom_meeting_id);
+      await deleteZoomMeeting(
+        validZoomToken,
+        meeting.zoom_meeting_id.toString(),
+        meeting.event.user.id
+      );
+
+      // 2. Eliminar evento del calendario
+      await deleteCalendarEvent(
+        calendar,
+        effectiveCalendarId, // ✅ Usar effectiveCalendarId
+        meeting.calendarEventId,
+        calendarType
+      );
+
+    } else {
+      throw new BadRequestException(
+        `Unsupported location type: ${meeting.event.locationType}`
+      );
+    }
+
   } catch (error) {
-    // Si falla la eliminación del calendario, lanzar error específico
-    console.error("Calendar deletion error:", error);
-    throw new BadRequestException("Failed to delete event from calendar");
+    console.error("Calendar/Meeting deletion error:", error);
+    throw error;
   }
 
-  // PASO 4: MARCAR REUNIÓN COMO CANCELADA EN BASE DE DATOS
+  // PASO 5: MARCAR REUNIÓN COMO CANCELADA EN BASE DE DATOS
   meeting.status = MeetingStatus.CANCELLED;
   await meetingRepository.save(meeting);
 
   return { success: true };
 };
 
+
+
 /**
- * FUNCIÓN HELPER: OBTENER CLIENTE DE CALENDARIO AUTENTICADO
- * 
- * Funcionalidad:
- * - Valida tokens de acceso (refresca si es necesario)
- * - Configura cliente de Google Calendar con autenticación OAuth2
- * - Maneja diferentes tipos de proveedores de calendario
- * 
- * @param appType - Tipo de aplicación/integración
- * @param access_token - Token de acceso OAuth2
- * @param refresh_token - Token de actualización OAuth2
+ * Crea una reunión en Zoom
+ * @param access_token - Token de acceso de Zoom
+ * @param refresh_token - Token de actualización de Zoom
  * @param expiry_date - Fecha de expiración del token
- * @returns Cliente de calendario configurado y tipo de calendario
+ * @param meetingData - Datos de la reunión a crear
+ * @returns Objeto con información de la reunión creada
  */
-async function getCalendarClient(
-  appType: IntegrationAppTypeEnum,
-  access_token: string,
-  refresh_token: string,
-  expiry_date: number | null
-) {
-  switch (appType) {
-    case IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR:
-      // Validar y obtener token válido (refresca automáticamente si expiró)
-      const validToken = await validateGoogleToken(
-        access_token,
-        refresh_token,
-        expiry_date
-      );
-
-      // Configurar cliente OAuth2 de Google
-      googleOAuth2Client.setCredentials({ access_token: validToken });
-
-      // Crear cliente de Google Calendar API
-      const calendar = google.calendar({
-        version: "v3",
-        auth: googleOAuth2Client,
-      });
-
-      return {
-        calendar,
-        calendarType: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
-        accessToken: validToken // ← AGREGAR esta línea
-      };
-
-    case IntegrationAppTypeEnum.ZOOM_MEETING:
-      const validZoomToken = await validateZoomToken(
-        access_token,
-        refresh_token,
-        expiry_date
-      );
-
-      return {
-        calendar: null, // Zoom no usa calendar client
-        calendarType: IntegrationAppTypeEnum.ZOOM_MEETING,
-        accessToken: validZoomToken
-      };
-
-    default:
-      throw new BadRequestException(
-        `Unsupported Calendar provider: ${appType}`
-      );
-  }
-}
-
 async function createZoomMeeting(
   access_token: string,
   refresh_token: string,
@@ -554,5 +557,196 @@ async function createZoomMeeting(
   return {
     meetingData: meeting,
     meetingType: IntegrationAppTypeEnum.ZOOM_MEETING
+  };
+}
+
+/**
+ * Crea un evento de calendario en Google Calendar
+ * @param calendarClient - Cliente de Google Calendar autenticado
+ * @param calendarId - ID del calendario donde se creará el evento
+ * @param eventData - Datos del evento a crear
+ * @returns Objeto con ID del evento y enlace de Google Meet (si aplica)
+ */
+const createCalendarEvent = async (
+  calendarClient: any,
+  calendarId: string,
+  eventData: {
+    title: string;
+    guestName: string;
+    guestEmail: string;
+    organizerEmail: string;
+    additionalInfo?: string;
+    startTime: Date;
+    endTime: Date;
+    timezone: string;
+    eventId: string;
+    includeConferenceData?: boolean;
+  }
+) => {
+  const formatDateForCalendar = (date: Date) => {
+    return date.toISOString().replace('Z', '');
+  };
+
+  const formattedStart = formatDateForCalendar(eventData.startTime);
+  const formattedEnd = formatDateForCalendar(eventData.endTime);
+
+  console.log('------------------------------------------------------------');
+  console.log('createCalendarEvent called with calendarId:', calendarId);
+  console.log('eventData:', eventData);
+  console.log('------------------------------------------------------------');
+
+  // console.log('---------------------------------------------------------------');
+  // console.log('startTime:', eventData.startTime);
+  // console.log('endTime:', eventData.endTime);
+  // console.log('timezone startTime:', eventData.timezone, formattedStart);
+  // console.log('timezone endTime:', eventData.timezone, formattedEnd);
+  // console.log('---------------------------------------------------------------');
+
+  if (!calendarClient) {
+    throw new BadRequestException("Failed to initialize Calendar client");
+  }
+
+  const requestBody: any = {
+    summary: `${eventData.guestName} - ${eventData.title}`,
+    description: eventData.additionalInfo,
+    start: {
+      dateTime: formattedStart,
+      timeZone: eventData.timezone,
+    },
+    end: {
+      dateTime: formattedEnd,
+      timeZone: eventData.timezone,
+    },
+    attendees: [
+      { email: eventData.guestEmail },
+      { email: eventData.organizerEmail }
+    ],
+  };
+
+  // Solo incluir conferenceData si se solicita (para Google Meet)
+  if (eventData.includeConferenceData) {
+    requestBody.conferenceData = {
+      createRequest: {
+        requestId: `${eventData.eventId}-${Date.now()}`,
+      },
+    };
+  }
+
+  const response = await calendarClient.events.insert({
+    calendarId: calendarId,
+    conferenceDataVersion: eventData.includeConferenceData ? 1 : 0,
+    requestBody,
+  });
+
+  // console.log("Calendar event created:", response.data);
+
+  return {
+    calendarEventId: response.data.id!,
+    hangoutLink: response.data.hangoutLink || null
+  };
+};
+
+/**
+ * Elimina un evento de calendario de Google Calendar
+ * @param calendarClient - Cliente de Google Calendar autenticado
+ * @param calendarId - ID del calendario del que se eliminará el evento
+ * @param eventId - ID del evento a eliminar
+ * @param calendarType - Tipo de calendario (para logs)
+ */
+const deleteCalendarEvent = async (
+  calendarClient: any,
+  calendarId: string,
+  eventId: string,
+  calendarType: string
+) => {
+  console.log('------------------------------------------------------------');
+  console.log('cancelMeetingService called with calendarId:', calendarId);
+  console.log('------------------------------------------------------------');
+  if (!calendarClient) {
+    throw new BadRequestException(`Failed to initialize ${calendarType} Calendar client`);
+  }
+
+  await calendarClient.events.delete({
+    calendarId: calendarId,
+    eventId: eventId,
+  });
+
+  console.log(`✅ Calendar event deleted successfully from ${calendarType}`);
+};
+
+/**
+ * Elimina una reunión de Zoom con validación de permisos
+ * @param accessToken - Token de acceso de Zoom
+ * @param zoomMeetingId - ID de la reunión de Zoom a eliminar
+ * @param userId - ID del usuario propietario de la reunión (para reautenticación)
+ */
+const deleteZoomMeeting = async (
+  accessToken: string,
+  zoomMeetingId: string,
+  userId: string
+) => {
+  console.log('------------------------------------------------------------');
+  console.log('deleteZoomMeeting called with zoomMeetingId:', zoomMeetingId);
+  console.log('------------------------------------------------------------');
+
+  const deleteResult = await deleteZoomMeetingWithValidation(
+    accessToken,
+    zoomMeetingId
+  );
+
+  if (!deleteResult.success) {
+    if (deleteResult.needsReauth) {
+      const reauthUrl = buildZoomReauthUrl(
+        zoomOAuth2Client.clientId,
+        zoomOAuth2Client.redirectUri,
+        userId
+      );
+
+      throw new BadRequestException(
+        `Missing required permissions for Zoom. User needs to reauthorize: ${reauthUrl}`
+      );
+    } else {
+      throw new BadRequestException(
+        `Failed to delete Zoom meeting: ${deleteResult.error}`
+      );
+    }
+  }
+
+  console.log('✅ Zoom meeting deleted successfully');
+};
+
+
+/**
+ * Obtiene un cliente de Google Calendar autenticado
+ * @param access_token - Token de acceso OAuth2
+ * @param refresh_token - Token de actualización OAuth2
+ * @param expiry_date - Fecha de expiración del token
+ * @returns Objeto con cliente de calendario y tipo de integración
+ */
+async function getGoogleCalendarClient(
+  access_token: string,
+  refresh_token: string,
+  expiry_date: number | null
+) {
+  // Validar y obtener token válido de Google
+  const validToken = await validateGoogleToken(
+    access_token,
+    refresh_token,
+    expiry_date
+  );
+
+  // Configurar cliente OAuth2 de Google
+  googleOAuth2Client.setCredentials({ access_token: validToken });
+
+  // Crear cliente de Google Calendar API
+  const calendar = google.calendar({
+    version: "v3",
+    auth: googleOAuth2Client,
+  });
+
+  return {
+    calendar,
+    calendarType: IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
+    accessToken: validToken
   };
 }

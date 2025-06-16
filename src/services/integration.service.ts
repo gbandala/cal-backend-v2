@@ -307,7 +307,7 @@ export const validateGoogleToken = async (
     // LLAMADA API: Solicitar nuevos tokens a Google
     const { credentials } = await googleOAuth2Client.refreshAccessToken();
 
-    console.log("New access token obtained:", credentials.access_token);
+    // console.log("New access token obtained:", credentials.access_token);
     // RETORNO: Nuevo access token válido
     return credentials.access_token;
   }
@@ -337,7 +337,7 @@ export const validateZoomToken = async (
     });
 
     const data = await response.json();
-    console.log("New Zoom access token obtained:", data.access_token);
+    // console.log("New Zoom access token obtained:", data.access_token);
     return data.access_token;
   }
 

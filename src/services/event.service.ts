@@ -30,9 +30,12 @@ export const createEventService = async (
   userId: string,
   createEventDto: CreateEventDto
 ) => {
+
+  console.log('------------------------------------------------------------');
   console.log("Creating event for user:", userId, createEventDto);
+  console.log('------------------------------------------------------------');
   const eventRepository = AppDataSource.getRepository(Event);
-  console.log("Event repository initialized", eventRepository.metadata);
+  // console.log("Event repository initialized", eventRepository.metadata);
 
   // VALIDACIÓN: Verificar que el tipo de ubicación sea válido
   // EventLocationEnumType contiene valores como: "ONLINE", "IN_PERSON", "PHONE", etc.
@@ -46,7 +49,7 @@ export const createEventService = async (
   // Ejemplo: "Consultoría de Marketing" → "consultoria-marketing"
   // slugify() remueve acentos, espacios, caracteres especiales
   const slug = slugify(createEventDto.title);
-  console.log("Generated slug:", slug);
+  // console.log("Generated slug:", slug);
 
   // CREACIÓN DE ENTIDAD: Combinar DTO + datos generados + relación
   const event = eventRepository.create({
@@ -280,7 +283,7 @@ export const deleteEventService = async (userId: string, eventId: string) => {
   // 🆕 PASO 1: MANEJAR REUNIONES ASOCIADAS
   if (event.meetings && event.meetings.length > 0) {
     console.log(`Found ${event.meetings.length} meetings for event ${eventId}, cancelling them...`);
-    
+
     // Cancelar cada reunión individualmente
     for (const meeting of event.meetings) {
       try {
@@ -296,13 +299,13 @@ export const deleteEventService = async (userId: string, eventId: string) => {
         } else {
           console.warn(`Failed to cancel meeting ${meeting.id}:`, error);
         }
-        
+
         // Como fallback, marcar como cancelada en BD
         meeting.status = MeetingStatus.CANCELLED;
         await meetingRepository.save(meeting);
       }
     }
-    
+
     // 🆕 PASO 2: ELIMINAR REUNIONES DE LA BASE DE DATOS
     // Eliminar físicamente todas las reuniones (ya canceladas)
     await meetingRepository.remove(event.meetings);
@@ -315,7 +318,7 @@ export const deleteEventService = async (userId: string, eventId: string) => {
   console.log("Event deleted:", eventId, "by user:", userId);
 
   // CONFIRMACIÓN: Respuesta de éxito
-  return { 
+  return {
     success: true,
     message: "Event and associated meetings deleted successfully"
   };
