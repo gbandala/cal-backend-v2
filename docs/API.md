@@ -1,595 +1,1323 @@
-# 🔌 Documentación de API - Cal Backend V2
+# 🔌 API Documentation - Cal Backend v3.0
 
-> Documentación completa de todos los endpoints disponibles en Cal Backend V2
+> **Documentación completa de la API REST**  
+> Endpoints modernos con soporte para múltiples proveedores y estrategias
 
-## 📋 Índice
+[![API Version](https://img.shields.io/badge/API-v3.0-blue.svg)](https://github.com/gbandala/cal-backend-v3)
+[![Response Format](https://img.shields.io/badge/Format-JSON-green.svg)](https://www.json.org/)
+[![Authentication](https://img.shields.io/badge/Auth-JWT-orange.svg)](https://jwt.io/)
 
-- [Autenticación](#-autenticación)
-- [Eventos](#-eventos)
-- [Disponibilidad](#-disponibilidad)
-- [Integraciones](#-integraciones)  
-- [Reuniones](#-reuniones)
-- [Modelos de Datos](#-modelos-de-datos)
-- [Códigos de Error](#-códigos-de-error)
+---
+
+## 📋 Tabla de Contenidos
+
+- [🔐 Autenticación](#-autenticación)
+- [👤 Usuarios](#-usuarios)
+- [📅 Event Types](#-event-types)
+- [🤝 Reuniones](#-reuniones)
+- [📆 Calendarios](#-calendarios)
+- [⚡ Integraciones](#-integraciones)
+- [🔍 Disponibilidad](#-disponibilidad)
+- [❌ Manejo de Errores](#-manejo-de-errores)
+- [📊 Códigos de Estado](#-códigos-de-estado)
+
+---
+
+## 🌐 Base URL
+
+```
+Production: https://api.cal-backend-v3.com
+Development: http://localhost:8000
+```
 
 ## 🔐 Autenticación
 
-### Base URL
-```
-http://localhost:8000/api/auth
-```
+Todos los endpoints protegidos requieren un token JWT en el header `Authorization`.
 
-### Registrar Usuario
 ```http
-POST /register
+Authorization: Bearer <jwt_token>
 ```
 
-**Body:**
+### **POST** `/api/auth/register`
+
+Registra un nuevo usuario en el sistema.
+
+**Request Body:**
 ```json
 {
-  "name": "Dr. Juan Pérez",
-  "email": "dr.juan@ejemplo.com", 
+  "name": "Juan Pérez",
+  "email": "juan@ejemplo.com",
+  "password": "password123",
+  "timezone": "America/Mexico_City"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "uuid-123",
+      "name": "Juan Pérez",
+      "email": "juan@ejemplo.com",
+      "username": "juan-perez-1234",
+      "timezone": "America/Mexico_City",
+      "createdAt": "2025-06-22T10:00:00Z"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  }
+}
+```
+
+### **POST** `/api/auth/login`
+
+Inicia sesión de usuario existente.
+
+**Request Body:**
+```json
+{
+  "email": "juan@ejemplo.com",
   "password": "password123"
 }
 ```
 
-**Respuesta exitosa (201):**
+**Response (200):**
 ```json
 {
   "success": true,
-  "message": "Usuario registrado exitosamente",
   "data": {
     "user": {
-      "id": "uuid-generado",
-      "name": "Dr. Juan Pérez",
-      "username": "dr-juan-perez-1234",
-      "email": "dr.juan@ejemplo.com",
-      "imageUrl": null
+      "id": "uuid-123",
+      "name": "Juan Pérez",
+      "email": "juan@ejemplo.com",
+      "username": "juan-perez-1234"
     },
-    "token": "jwt-token-aqui"
+    "token": "eyJhbGciOiJIUzI1NiIs..."
   }
 }
 ```
 
-### Iniciar Sesión
+### **POST** `/api/auth/refresh`
+
+Renueva el token JWT.
+
+**Headers:**
 ```http
-POST /login
+Authorization: Bearer <current_token>
 ```
 
-**Body:**
-```json
-{
-  "email": "dr.juan@ejemplo.com",
-  "password": "password123"
-}
-```
-
-**Respuesta exitosa (200):**
+**Response (200):**
 ```json
 {
   "success": true,
-  "message": "Login exitoso",
   "data": {
-    "user": {
-      "id": "uuid-del-usuario",
-      "name": "Dr. Juan Pérez",
-      "username": "dr-juan-perez-1234",
-      "email": "dr.juan@ejemplo.com"
-    },
-    "token": "jwt-token-aqui"
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expiresAt": "2025-06-23T10:00:00Z"
   }
 }
 ```
 
-## 📅 Eventos
+---
 
-### Base URL
-```
-http://localhost:8000/api/event
-```
+## 👤 Usuarios
 
-### Crear Evento
+### **GET** `/api/users/profile`
+
+Obtiene el perfil del usuario autenticado.
+
+**Headers:**
 ```http
-POST /create
-Authorization: Bearer {token}
+Authorization: Bearer <jwt_token>
 ```
 
-**Body:**
-```json
-{
-  "title": "Consulta Médica - 30 min",
-  "description": "Consulta en calendario específico", 
-  "duration": 30,
-  "locationType": "GOOGLE_MEET_AND_CALENDAR",
-  "calendar_id": "consultorio@gmail.com",
-  "calendar_name": "Calendario Consultorio"
-}
-```
-
-**Respuesta exitosa (201):**
-```json
-{
-  "success": true,
-  "message": "Evento creado exitosamente",
-  "data": {
-    "id": "uuid-del-evento",
-    "title": "Consulta Médica - 30 min",
-    "description": "Consulta en calendario específico",
-    "duration": 30,
-    "slug": "consulta-medica-30-min-abc123",
-    "isPrivate": false,
-    "locationType": "GOOGLE_MEET_AND_CALENDAR",
-    "calendar_id": "consultorio@gmail.com",
-    "calendar_name": "Calendario Consultorio",
-    "user": {
-      "id": "uuid-del-usuario",
-      "username": "dr-juan-perez-1234"
-    }
-  }
-}
-```
-
-### Obtener Eventos del Usuario
-```http
-GET /all
-Authorization: Bearer {token}
-```
-
-**Respuesta exitosa (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-del-evento",
-      "title": "Consulta Médica - 30 min",
-      "description": "Consulta en calendario específico",
-      "duration": 30,
-      "slug": "consulta-medica-30-min-abc123",
-      "isPrivate": false,
-      "locationType": "GOOGLE_MEET_AND_CALENDAR",
-      "calendar_id": "consultorio@gmail.com",
-      "calendar_name": "Calendario Consultorio"
-    }
-  ]
-}
-```
-
-### Obtener Eventos Públicos
-```http
-GET /public/{username}
-```
-
-**Respuesta exitosa (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-del-evento",
-      "title": "Consulta Médica - 30 min",
-      "duration": 30,
-      "slug": "consulta-medica-30-min-abc123",
-      "locationType": "GOOGLE_MEET_AND_CALENDAR"
-    }
-  ]
-}
-```
-
-### Obtener Evento Público Específico
-```http
-GET /public/{username}/{slug}
-```
-
-### Cambiar Privacidad del Evento
-```http
-PUT /toggle-privacy
-Authorization: Bearer {token}
-```
-
-**Body:**
-```json
-{
-  "eventId": "uuid-del-evento"
-}
-```
-
-### Eliminar Evento
-```http
-DELETE /{eventId}
-Authorization: Bearer {token}
-```
-
-## ⏰ Disponibilidad
-
-### Base URL
-```
-http://localhost:8000/api/availability
-```
-
-### Obtener Disponibilidad Personal
-```http
-GET /me?timezone={timezone}&date={date}
-Authorization: Bearer {token}
-```
-
-**Parámetros de consulta:**
-- `timezone` (opcional): Zona horaria IANA (ej: `America/Mexico_City`)
-- `date` (opcional): Fecha específica en formato `YYYY-MM-DD`
-
-**Respuesta exitosa (200):**
+**Response (200):**
 ```json
 {
   "success": true,
   "data": {
-    "id": "uuid-availability",
-    "timeGap": 15,
-    "days": [
-      {
-        "id": "uuid-day",
-        "day": "MONDAY", 
-        "startTime": "2025-06-10T09:00:00.000",
-        "endTime": "2025-06-10T17:00:00.000",
-        "isAvailable": true
+    "id": "uuid-123",
+    "name": "Juan Pérez",
+    "email": "juan@ejemplo.com",
+    "username": "juan-perez-1234",
+    "timezone": "America/Mexico_City",
+    "avatar": "https://...",
+    "integrations": {
+      "google": {
+        "connected": true,
+        "email": "juan@gmail.com",
+        "calendars": ["primary", "work"]
+      },
+      "outlook": {
+        "connected": true,
+        "email": "juan@outlook.com",
+        "calendars": ["Calendar"]
+      },
+      "zoom": {
+        "connected": true,
+        "email": "juan@zoom.us"
       }
-    ]
+    }
   }
 }
 ```
 
-### Obtener Disponibilidad para Evento Público
-```http
-GET /public/{eventId}?timezone={timezone}&date={date}
+### **PUT** `/api/users/profile`
+
+Actualiza el perfil del usuario.
+
+**Request Body:**
+```json
+{
+  "name": "Juan Carlos Pérez",
+  "timezone": "America/Los_Angeles",
+  "avatar": "https://example.com/avatar.jpg"
+}
 ```
 
-**Respuesta exitosa (200):**
+**Response (200):**
 ```json
 {
   "success": true,
   "data": {
-    "eventInfo": {
-      "title": "Consulta Médica - 30 min",
-      "duration": 30,
-      "locationType": "GOOGLE_MEET_AND_CALENDAR"
-    },
-    "availableSlots": [
+    "id": "uuid-123",
+    "name": "Juan Carlos Pérez",
+    "timezone": "America/Los_Angeles",
+    "updatedAt": "2025-06-22T10:30:00Z"
+  }
+}
+```
+
+---
+
+## 📅 Event Types
+
+### **GET** `/api/event-types`
+
+Lista todos los tipos de eventos del usuario.
+
+**Query Parameters:**
+- `page` (optional): Número de página (default: 1)
+- `limit` (optional): Elementos por página (default: 10)
+- `search` (optional): Búsqueda por título
+- `status` (optional): `active` | `inactive`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "eventTypes": [
       {
-        "startTime": "2025-06-10T09:00:00.000",
-        "endTime": "2025-06-10T09:30:00.000"
+        "id": "uuid-456",
+        "title": "Consulta Médica",
+        "slug": "consulta-medica",
+        "description": "Consulta médica de 30 minutos",
+        "duration": 30,
+        "status": "active",
+        "isPrivate": false,
+        "location": {
+          "type": "zoom-outlook",
+          "calendar": "outlook",
+          "meeting": "zoom"
+        },
+        "availability": {
+          "timezone": "America/Mexico_City",
+          "schedule": [
+            {
+              "day": "monday",
+              "enabled": true,
+              "slots": [
+                {"start": "09:00", "end": "17:00"}
+              ]
+            }
+          ]
+        },
+        "createdAt": "2025-06-22T09:00:00Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 5,
+      "totalPages": 1
+    }
+  }
+}
+```
+
+### **POST** `/api/event-types`
+
+Crea un nuevo tipo de evento.
+
+**Request Body:**
+```json
+{
+  "title": "Reunión de Equipo",
+  "description": "Reunión semanal del equipo de desarrollo",
+  "duration": 60,
+  "location": {
+    "type": "teams-outlook",
+    "calendar": "outlook",
+    "meeting": "teams"
+  },
+  "isPrivate": false,
+  "availability": {
+    "timezone": "America/Mexico_City",
+    "schedule": [
+      {
+        "day": "monday",
+        "enabled": true,
+        "slots": [
+          {"start": "09:00", "end": "17:00"}
+        ]
       },
       {
-        "startTime": "2025-06-10T09:45:00.000", 
-        "endTime": "2025-06-10T10:15:00.000"
-      }
-    ]
-  }
-}
-```
-
-### Actualizar Disponibilidad
-```http
-PUT /update?timezone={timezone}
-Authorization: Bearer {token}
-```
-
-**Body:**
-```json
-{
-  "timeGap": 15,
-  "days": [
-    {
-      "day": "MONDAY",
-      "startTime": "09:00",
-      "endTime": "17:00", 
-      "isAvailable": true
-    },
-    {
-      "day": "TUESDAY",
-      "startTime": "10:00",
-      "endTime": "16:00",
-      "isAvailable": true
-    }
-  ]
-}
-```
-
-## 🔗 Integraciones
-
-### Base URL
-```
-http://localhost:8000/api/integration
-```
-
-### Obtener Todas las Integraciones
-```http
-GET /all
-Authorization: Bearer {token}
-```
-
-**Respuesta exitosa (200):**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": "uuid-integration",
-      "provider": "GOOGLE",
-      "category": "CALENDAR", 
-      "app_type": "GOOGLE_CALENDAR_AND_MEET",
-      "isConnected": true,
-      "metadata": {
-        "email": "usuario@gmail.com",
-        "calendars": [
-          {
-            "id": "primary",
-            "summary": "usuario@gmail.com"
-          },
-          {
-            "id": "consultorio@gmail.com", 
-            "summary": "Calendario Consultorio"
-          }
+        "day": "tuesday", 
+        "enabled": true,
+        "slots": [
+          {"start": "10:00", "end": "16:00"}
         ]
       }
+    ]
+  },
+  "bufferTime": {
+    "before": 15,
+    "after": 15
+  }
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-789",
+    "title": "Reunión de Equipo",
+    "slug": "reunion-de-equipo",
+    "description": "Reunión semanal del equipo de desarrollo",
+    "duration": 60,
+    "location": {
+      "type": "teams-outlook",
+      "calendar": "outlook",
+      "meeting": "teams"
+    },
+    "strategy": "teams-outlook-calendar",
+    "publicUrl": "https://cal.ejemplo.com/juan-perez-1234/reunion-de-equipo",
+    "createdAt": "2025-06-22T10:15:00Z"
+  }
+}
+```
+
+### **GET** `/api/event-types/:id`
+
+Obtiene un tipo de evento específico.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-456",
+    "title": "Consulta Médica",
+    "description": "Consulta médica de 30 minutos",
+    "duration": 30,
+    "location": {
+      "type": "zoom-outlook",
+      "calendar": "outlook",
+      "meeting": "zoom",
+      "strategy": "zoom-outlook-calendar"
+    },
+    "availability": {
+      "timezone": "America/Mexico_City",
+      "schedule": [...],
+      "exceptions": [
+        {
+          "date": "2025-06-25",
+          "reason": "Feriado nacional",
+          "unavailable": true
+        }
+      ]
+    },
+    "meetings": {
+      "total": 45,
+      "upcoming": 12,
+      "completed": 33
     }
-  ]
-}
-```
-
-### Verificar Estado de Integración
-```http
-GET /check/{appType}
-Authorization: Bearer {token}
-```
-
-**Respuesta exitosa (200):**
-```json
-{
-  "success": true,
-  "data": {
-    "isConnected": true,
-    "provider": "GOOGLE",
-    "lastSync": "2025-06-10T14:30:00.000Z"
   }
 }
 ```
 
-### Obtener URL de Conexión OAuth
-```http
-GET /connect/{appType}
-Authorization: Bearer {token}
-```
+### **PUT** `/api/event-types/:id`
 
-**Respuesta exitosa (200):**
+Actualiza un tipo de evento.
+
+**Request Body:** (Campos opcionales)
 ```json
 {
-  "success": true,
-  "data": {
-    "authUrl": "https://accounts.google.com/oauth2/auth?client_id=...&scope=https://www.googleapis.com/auth/calendar..."
+  "title": "Consulta Médica Actualizada",
+  "duration": 45,
+  "location": {
+    "type": "google-meet",
+    "calendar": "google",
+    "meeting": "google-meet"
   }
 }
 ```
 
-### Callback OAuth de Google
-```http
-GET /google/callback?code={authorization_code}&state={state}
+### **DELETE** `/api/event-types/:id`
+
+Elimina un tipo de evento y todas sus reuniones asociadas.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "deleted": true,
+    "meetingsCanceled": 12,
+    "message": "Event type and associated meetings deleted successfully"
+  }
+}
 ```
+
+---
 
 ## 🤝 Reuniones
 
-### Base URL
-```
-http://localhost:8000/api/meeting
-```
+### **GET** `/api/meetings`
 
-### Obtener Reuniones del Usuario
-```http
-GET /user/all?filter={filter}
-Authorization: Bearer {token}
-```
+Lista todas las reuniones del usuario.
 
-**Parámetros de consulta:**
-- `filter`: `upcoming` | `past` | `cancelled` | `all`
+**Query Parameters:**
+- `status` (optional): `upcoming` | `past` | `canceled`
+- `eventTypeId` (optional): Filtrar por tipo de evento
+- `from` (optional): Fecha desde (ISO 8601)
+- `to` (optional): Fecha hasta (ISO 8601)
+- `strategy` (optional): `zoom-outlook` | `teams-outlook` | `google-meet`
 
-**Respuesta exitosa (200):**
+**Response (200):**
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "uuid-meeting",
-      "guestName": "María García",
-      "guestEmail": "maria@ejemplo.com",
-      "startTime": "2025-06-15T10:00:00.000",
-      "endTime": "2025-06-15T10:30:00.000", 
-      "meetLink": "https://meet.google.com/abc-defg-hij",
-      "status": "SCHEDULED",
-      "additionalInfo": "Primera consulta",
-      "event": {
-        "title": "Consulta Médica - 30 min",
-        "duration": 30
+  "data": {
+    "meetings": [
+      {
+        "id": "uuid-meeting-1",
+        "title": "Consulta con Dr. Smith",
+        "startTime": "2025-06-23T15:00:00Z",
+        "endTime": "2025-06-23T15:30:00Z",
+        "status": "scheduled",
+        "strategy": "zoom-outlook-calendar",
+        "attendees": [
+          {
+            "name": "María García",
+            "email": "maria@ejemplo.com",
+            "status": "accepted"
+          }
+        ],
+        "meeting": {
+          "provider": "zoom",
+          "joinUrl": "https://zoom.us/j/123456789",
+          "meetingId": "123456789",
+          "password": "secret123"
+        },
+        "calendarEvent": {
+          "provider": "outlook",
+          "eventId": "outlook-event-123",
+          "calendarId": "Calendar"
+        },
+        "eventType": {
+          "id": "uuid-456",
+          "title": "Consulta Médica",
+          "slug": "consulta-medica"
+        }
       }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 45
+    }
+  }
+}
+```
+
+### **POST** `/api/meetings/zoom-outlook`
+
+Crea una reunión usando Zoom + Outlook Calendar.
+
+**Request Body:**
+```json
+{
+  "eventTypeId": "uuid-456",
+  "attendee": {
+    "name": "María García",
+    "email": "maria@ejemplo.com",
+    "timezone": "America/Mexico_City"
+  },
+  "startTime": "2025-06-23T15:00:00Z",
+  "notes": "Consulta de seguimiento"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-meeting-1",
+    "title": "Consulta con Dr. Smith",
+    "startTime": "2025-06-23T15:00:00Z",
+    "endTime": "2025-06-23T15:30:00Z",
+    "status": "scheduled",
+    "strategy": "zoom-outlook-calendar",
+    "meeting": {
+      "provider": "zoom",
+      "id": "123456789",
+      "joinUrl": "https://zoom.us/j/123456789",
+      "hostUrl": "https://zoom.us/s/123456789",
+      "password": "secret123",
+      "dialIn": "+1-646-558-8656,123456789#"
+    },
+    "calendarEvent": {
+      "provider": "outlook",
+      "eventId": "outlook-event-123",
+      "calendarId": "Calendar",
+      "webLink": "https://outlook.com/calendar/event/123"
+    },
+    "attendees": [
+      {
+        "name": "María García",
+        "email": "maria@ejemplo.com",
+        "status": "pending"
+      }
+    ],
+    "executionTime": "1.8s"
+  }
+}
+```
+
+### **POST** `/api/meetings/teams-outlook`
+
+Crea una reunión usando Teams + Outlook Calendar.
+
+**Request Body:**
+```json
+{
+  "eventTypeId": "uuid-789",
+  "attendee": {
+    "name": "Carlos López",
+    "email": "carlos@empresa.com",
+    "timezone": "America/Los_Angeles"
+  },
+  "startTime": "2025-06-24T14:00:00Z"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-meeting-2",
+    "strategy": "teams-outlook-calendar",
+    "meeting": {
+      "provider": "teams",
+      "id": "teams-meeting-456",
+      "joinUrl": "https://teams.microsoft.com/l/meetup-join/...",
+      "conferenceId": "456789123",
+      "tollNumber": "+1-323-555-0100",
+      "tollFreeNumber": "+1-800-555-0100"
+    },
+    "calendarEvent": {
+      "provider": "outlook",
+      "eventId": "outlook-event-456",
+      "calendarId": "Calendar"
+    },
+    "executionTime": "2.1s"
+  }
+}
+```
+
+### **POST** `/api/meetings/google-meet`
+
+Crea una reunión usando Google Calendar + Google Meet.
+
+**Request Body:**
+```json
+{
+  "eventTypeId": "uuid-123",
+  "attendee": {
+    "name": "Ana Rodríguez",
+    "email": "ana@gmail.com"
+  },
+  "startTime": "2025-06-25T09:00:00Z"
+}
+```
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "data": {
+    "strategy": "google-calendar-google-meet",
+    "meeting": {
+      "provider": "google-meet",
+      "joinUrl": "https://meet.google.com/abc-defg-hij",
+      "meetingCode": "abc-defg-hij",
+      "dialIn": "+1-234-567-8900 PIN: 123456789"
+    },
+    "calendarEvent": {
+      "provider": "google",
+      "eventId": "google-event-789",
+      "calendarId": "primary"
+    },
+    "executionTime": "1.2s"
+  }
+}
+```
+
+### **GET** `/api/meetings/:id`
+
+Obtiene detalles de una reunión específica.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-meeting-1",
+    "title": "Consulta con Dr. Smith",
+    "startTime": "2025-06-23T15:00:00Z",
+    "endTime": "2025-06-23T15:30:00Z",
+    "status": "scheduled",
+    "strategy": "zoom-outlook-calendar",
+    "meeting": {
+      "provider": "zoom",
+      "joinUrl": "https://zoom.us/j/123456789",
+      "hostUrl": "https://zoom.us/s/123456789",
+      "password": "secret123",
+      "settings": {
+        "hostVideo": true,
+        "participantVideo": true,
+        "waitingRoom": true
+      }
+    },
+    "calendarEvent": {
+      "provider": "outlook",
+      "eventId": "outlook-event-123",
+      "htmlLink": "https://outlook.com/calendar/event/123"
+    },
+    "attendees": [
+      {
+        "name": "María García",
+        "email": "maria@ejemplo.com",
+        "status": "accepted",
+        "responseTime": "2025-06-22T16:30:00Z"
+      }
+    ],
+    "notes": "Consulta de seguimiento",
+    "createdAt": "2025-06-22T12:00:00Z"
+  }
+}
+```
+
+### **DELETE** `/api/meetings/:id`
+
+Cancela una reunión.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-meeting-1",
+    "status": "canceled",
+    "canceledAt": "2025-06-22T18:00:00Z",
+    "strategy": "zoom-outlook-calendar",
+    "actions": {
+      "zoomMeetingDeleted": true,
+      "outlookEventDeleted": true,
+      "attendeesNotified": true
+    }
+  }
+}
+```
+
+---
+
+## 📆 Calendarios
+
+### **GET** `/api/calendars`
+
+Lista todos los calendarios conectados del usuario.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "calendars": [
+      {
+        "id": "google-primary",
+        "provider": "google",
+        "name": "Personal",
+        "email": "juan@gmail.com",
+        "primary": true,
+        "accessLevel": "owner",
+        "timezone": "America/Mexico_City",
+        "color": "#3174ad",
+        "connected": true,
+        "lastSync": "2025-06-22T18:00:00Z"
+      },
+      {
+        "id": "outlook-calendar",
+        "provider": "outlook",
+        "name": "Calendar", 
+        "email": "juan@outlook.com",
+        "primary": true,
+        "accessLevel": "owner",
+        "timezone": "America/Mexico_City",
+        "color": "#0078d4",
+        "connected": true,
+        "lastSync": "2025-06-22T17:45:00Z"
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "connected": 2,
+      "providers": ["google", "outlook"]
+    }
+  }
+}
+```
+
+### **POST** `/api/calendars/sync`
+
+Sincroniza calendarios con los proveedores.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "synced": [
+      {
+        "provider": "google",
+        "calendars": 1,
+        "events": 45,
+        "duration": "2.3s"
+      },
+      {
+        "provider": "outlook",
+        "calendars": 1,
+        "events": 23,
+        "duration": "1.8s"
+      }
+    ],
+    "totalEvents": 68,
+    "syncedAt": "2025-06-22T18:30:00Z"
+  }
+}
+```
+
+---
+
+## ⚡ Integraciones
+
+### **GET** `/api/integrations`
+
+Lista todas las integraciones disponibles y su estado.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "integrations": [
+      {
+        "provider": "google",
+        "name": "Google Calendar + Meet",
+        "connected": true,
+        "email": "juan@gmail.com",
+        "scopes": [
+          "https://www.googleapis.com/auth/calendar",
+          "https://www.googleapis.com/auth/calendar.events"
+        ],
+        "connectedAt": "2025-06-20T10:00:00Z",
+        "lastUsed": "2025-06-22T15:30:00Z",
+        "capabilities": ["calendar", "meeting"]
+      },
+      {
+        "provider": "outlook",
+        "name": "Outlook Calendar",
+        "connected": true,
+        "email": "juan@outlook.com",
+        "scopes": [
+          "https://graph.microsoft.com/Calendars.ReadWrite",
+          "https://graph.microsoft.com/OnlineMeetings.ReadWrite"
+        ],
+        "connectedAt": "2025-06-21T14:00:00Z",
+        "capabilities": ["calendar"]
+      },
+      {
+        "provider": "zoom",
+        "name": "Zoom Meetings",
+        "connected": true,
+        "email": "juan@zoom.us",
+        "connectedAt": "2025-06-21T16:00:00Z",
+        "capabilities": ["meeting"]
+      },
+      {
+        "provider": "teams",
+        "name": "Microsoft Teams",
+        "connected": false,
+        "capabilities": ["meeting"]
+      }
+    ],
+    "strategies": [
+      {
+        "name": "google-calendar-google-meet",
+        "available": true,
+        "description": "Google Calendar + Google Meet"
+      },
+      {
+        "name": "zoom-outlook-calendar", 
+        "available": true,
+        "description": "Zoom Meetings + Outlook Calendar"
+      },
+      {
+        "name": "teams-outlook-calendar",
+        "available": false,
+        "description": "Microsoft Teams + Outlook Calendar",
+        "reason": "Teams integration not connected"
+      }
+    ]
+  }
+}
+```
+
+### **POST** `/api/integrations/google/connect`
+
+Inicia el flujo de OAuth para conectar Google.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "authUrl": "https://accounts.google.com/oauth/authorize?client_id=...",
+    "state": "random-state-string",
+    "expiresIn": 600
+  }
+}
+```
+
+### **POST** `/api/integrations/google/callback`
+
+Completa la conexión con Google OAuth.
+
+**Request Body:**
+```json
+{
+  "code": "oauth-authorization-code",
+  "state": "random-state-string"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "provider": "google",
+    "connected": true,
+    "email": "juan@gmail.com",
+    "calendars": [
+      {
+        "id": "primary",
+        "name": "Personal",
+        "primary": true
+      }
+    ]
+  }
+}
+```
+
+### **POST** `/api/integrations/outlook/connect`
+
+Conecta con Microsoft Outlook/Teams.
+
+### **POST** `/api/integrations/zoom/connect`
+
+Conecta con Zoom.
+
+### **DELETE** `/api/integrations/:provider`
+
+Desconecta una integración.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "provider": "zoom",
+    "disconnected": true,
+    "affectedEventTypes": 3,
+    "message": "Zoom integration disconnected. 3 event types updated to use alternative providers."
+  }
+}
+```
+
+---
+
+## 🔍 Disponibilidad
+
+### **GET** `/api/availability/:username/:eventSlug`
+
+Obtiene la disponibilidad pública para un evento.
+
+**Query Parameters:**
+- `from` (required): Fecha desde (YYYY-MM-DD)
+- `to` (required): Fecha hasta (YYYY-MM-DD)
+- `timezone` (optional): Zona horaria del cliente
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "eventType": {
+      "id": "uuid-456",
+      "title": "Consulta Médica",
+      "duration": 30,
+      "timezone": "America/Mexico_City"
+    },
+    "availability": [
+      {
+        "date": "2025-06-23",
+        "available": true,
+        "slots": [
+          {
+            "start": "09:00:00",
+            "end": "09:30:00",
+            "available": true,
+            "datetime": "2025-06-23T15:00:00Z"
+          },
+          {
+            "start": "09:30:00", 
+            "end": "10:00:00",
+            "available": true,
+            "datetime": "2025-06-23T15:30:00Z"
+          },
+          {
+            "start": "14:00:00",
+            "end": "14:30:00",
+            "available": false,
+            "reason": "busy",
+            "datetime": "2025-06-23T20:00:00Z"
+          }
+        ]
+      },
+      {
+        "date": "2025-06-24",
+        "available": false,
+        "reason": "No working hours configured"
+      }
+    ],
+    "timezone": "America/Mexico_City"
+  }
+}
+```
+
+### **POST** `/api/availability/check`
+
+Verifica disponibilidad para múltiples rangos de tiempo.
+
+**Request Body:**
+```json
+{
+  "eventTypeId": "uuid-456",
+  "timeSlots": [
+    {
+      "start": "2025-06-23T15:00:00Z",
+      "end": "2025-06-23T15:30:00Z"
+    },
+    {
+      "start": "2025-06-23T16:00:00Z", 
+      "end": "2025-06-23T16:30:00Z"
     }
   ]
 }
 ```
 
-### Crear Reunión Pública
-```http
-POST /public/create
-```
-
-**Body:**
-```json
-{
-  "eventId": "uuid-del-evento",
-  "startTime": "2025-06-15T10:00:00.000Z",
-  "endTime": "2025-06-15T10:30:00.000Z",
-  "guestName": "María García",
-  "guestEmail": "maria@ejemplo.com", 
-  "additionalInfo": "Primera consulta"
-}
-```
-
-**Respuesta exitosa (201):**
+**Response (200):**
 ```json
 {
   "success": true,
-  "message": "Reunión creada exitosamente",
   "data": {
-    "id": "uuid-meeting",
-    "guestName": "María García",
-    "guestEmail": "maria@ejemplo.com",
-    "startTime": "2025-06-15T10:00:00.000",
-    "endTime": "2025-06-15T10:30:00.000",
-    "meetLink": "https://meet.google.com/abc-defg-hij",
-    "status": "SCHEDULED",
-    "calendarEventId": "google-calendar-event-id"
+    "results": [
+      {
+        "start": "2025-06-23T15:00:00Z",
+        "end": "2025-06-23T15:30:00Z",
+        "available": true
+      },
+      {
+        "start": "2025-06-23T16:00:00Z",
+        "end": "2025-06-23T16:30:00Z", 
+        "available": false,
+        "reason": "Conflict with existing meeting",
+        "conflictingMeeting": {
+          "id": "uuid-meeting-5",
+          "title": "Team Standup"
+        }
+      }
+    ],
+    "checkedAt": "2025-06-22T18:45:00Z"
   }
 }
 ```
 
-### Cancelar Reunión
-```http
-PUT /cancel/{meetingId}
-Authorization: Bearer {token}
-```
+---
 
-**Respuesta exitosa (200):**
+## 🔍 Health & Monitoring
+
+### **GET** `/api/health`
+
+Verifica el estado general del sistema.
+
+**Response (200):**
 ```json
 {
   "success": true,
-  "message": "Reunión cancelada exitosamente",
   "data": {
-    "id": "uuid-meeting",
-    "status": "CANCELLED"
+    "status": "healthy",
+    "timestamp": "2025-06-22T19:00:00Z",
+    "version": "3.0.0",
+    "uptime": "72h 15m 30s",
+    "database": {
+      "status": "connected",
+      "latency": "12ms"
+    },
+    "services": {
+      "total": 5,
+      "healthy": 4,
+      "degraded": 1,
+      "down": 0
+    }
   }
 }
 ```
 
-## 📊 Modelos de Datos
+### **GET** `/api/health/providers`
 
-### Usuario
-```typescript
-interface User {
-  id: string;           // UUID
-  name: string;         // Nombre completo
-  username: string;     // Username único
-  email: string;        // Email único
-  password: string;     // Hash bcrypt
-  imageUrl?: string;    // URL imagen perfil
+Estado de las integraciones externas.
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "providers": [
+      {
+        "name": "google",
+        "status": "healthy",
+        "latency": "120ms",
+        "lastCheck": "2025-06-22T18:59:30Z",
+        "errors24h": 0
+      },
+      {
+        "name": "outlook",
+        "status": "healthy", 
+        "latency": "200ms",
+        "lastCheck": "2025-06-22T18:59:30Z",
+        "errors24h": 2
+      },
+      {
+        "name": "zoom",
+        "status": "degraded",
+        "latency": "800ms",
+        "lastCheck": "2025-06-22T18:59:30Z",
+        "errors24h": 15,
+        "message": "High latency detected"
+      }
+    ],
+    "strategies": [
+      {
+        "name": "google-calendar-google-meet",
+        "available": true,
+        "avgExecutionTime": "1.2s"
+      },
+      {
+        "name": "zoom-outlook-calendar",
+        "available": true, 
+        "avgExecutionTime": "1.8s"
+      },
+      {
+        "name": "teams-outlook-calendar",
+        "available": false,
+        "reason": "Teams provider not connected"
+      }
+    ]
+  }
 }
 ```
 
-### Evento
-```typescript
-interface Event {
-  id: string;           // UUID
-  title: string;        // Título del evento
-  description?: string; // Descripción opcional
-  duration: number;     // Duración en minutos
-  slug: string;         // Slug único por usuario
-  isPrivate: boolean;   // Privacidad
-  locationType: EventLocationEnum;
-  calendar_id: string;  // ID calendario específico
-  calendar_name?: string; // Nombre calendario
-}
-```
+---
 
-### Reunión
-```typescript
-interface Meeting {
-  id: string;              // UUID
-  guestName: string;       // Nombre invitado
-  guestEmail: string;      // Email invitado  
-  additionalInfo?: string; // Info adicional
-  startTime: Date;         // Fecha/hora inicio
-  endTime: Date;           // Fecha/hora fin
-  meetLink: string;        // Enlace Meet
-  calendarEventId: string; // ID evento Google
-  status: MeetingStatus;   // Estado reunión
-}
-```
+## ❌ Manejo de Errores
 
-### Disponibilidad
-```typescript
-interface Availability {
-  id: string;        // UUID
-  timeGap: number;   // Minutos entre reuniones
-  days: DayAvailability[];
-}
+### **Estructura de Error Estándar**
 
-interface DayAvailability {
-  id: string;           // UUID
-  day: DayOfWeekEnum;   // Día semana
-  startTime: Date;      // Hora inicio
-  endTime: Date;        // Hora fin  
-  isAvailable: boolean; // Disponible
-}
-```
-
-## ⚠️ Códigos de Error
-
-### Errores de Autenticación
-- `401` - Token inválido o expirado
-- `403` - Permisos insuficientes  
-- `404` - Usuario no encontrado
-
-### Errores de Validación
-- `400` - Datos de entrada inválidos
-- `409` - Conflicto (email/username duplicado)
-- `422` - Error de validación específico
-
-### Errores de Integración
-- `502` - Error en servicio externo (Google)
-- `503` - Servicio no disponible
-- `429` - Límite de requests excedido
-
-### Ejemplo de Respuesta de Error
 ```json
 {
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Email ya está en uso",
+    "message": "Email is required",
     "details": {
       "field": "email",
-      "value": "usuario@ejemplo.com"
+      "value": null,
+      "constraint": "isEmail"
+    },
+    "timestamp": "2025-06-22T19:15:00Z",
+    "path": "/api/auth/register"
+  }
+}
+```
+
+### **Tipos de Errores**
+
+#### **Errores de Validación (400)**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "details": [
+      {
+        "field": "startTime",
+        "message": "Start time must be in the future"
+      },
+      {
+        "field": "duration",
+        "message": "Duration must be between 15 and 480 minutes"
+      }
+    ]
+  }
+}
+```
+
+#### **Errores de Autenticación (401)**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid or expired token"
+  }
+}
+```
+
+#### **Errores de Autorización (403)**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "You don't have permission to access this resource"
+  }
+}
+```
+
+#### **Errores de Recursos No Encontrados (404)**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Event type not found",
+    "resource": "eventType",
+    "id": "uuid-not-found"
+  }
+}
+```
+
+#### **Errores de Integración (502)**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTEGRATION_ERROR",
+    "message": "Failed to create Zoom meeting",
+    "provider": "zoom",
+    "strategy": "zoom-outlook-calendar",
+    "details": {
+      "providerError": "Meeting limit exceeded",
+      "retryable": true,
+      "retryAfter": 300
     }
   }
 }
 ```
 
-## 🌍 Soporte de Zonas Horarias
-
-Todos los endpoints que manejan fechas soportan el parámetro `timezone`:
-
-```bash
-# Ejemplos de zonas horarias válidas
-America/Mexico_City
-Europe/Madrid  
-Asia/Tokyo
-America/New_York
-UTC
+#### **Errores de Rate Limiting (429)**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests",
+    "retryAfter": 60,
+    "limit": 100,
+    "remaining": 0,
+    "resetTime": "2025-06-22T20:00:00Z"
+  }
+}
 ```
-
-**Formato de fechas:**
-- **Input**: ISO 8601 con Z (`2025-06-15T10:00:00.000Z`)
-- **Output**: ISO 8601 sin Z (`2025-06-15T10:00:00.000`) para horario local
-
-## 📝 Notas Importantes
-
-1. **Autenticación**: Todos los endpoints marcados con 🔒 requieren header `Authorization: Bearer {token}`
-
-2. **Rate Limiting**: Máximo 100 requests por minuto por IP
-
-3. **CORS**: Configurado para `http://localhost:3000` en desarrollo
-
-4. **Fechas**: Siempre usar formato ISO 8601. El backend maneja automáticamente la conversión UTC/Local
-
-5. **Calendarios**: El `calendar_id` debe ser un calendario válido del usuario autenticado
-
-6. **Webhooks**: Disponibles para notificaciones de reuniones (próximamente)
 
 ---
 
-Para más información sobre implementación, consulta el [README principal](../README.md) o la [Guía de Configuración](./SETUP.md).
+## 📊 Códigos de Estado HTTP
+
+| Código | Significado | Cuándo se usa |
+|--------|-------------|---------------|
+| **200** | OK | Operación exitosa |
+| **201** | Created | Recurso creado exitosamente |
+| **400** | Bad Request | Error en los datos enviados |
+| **401** | Unauthorized | Token inválido o ausente |
+| **403** | Forbidden | Sin permisos para el recurso |
+| **404** | Not Found | Recurso no encontrado |
+| **409** | Conflict | Conflicto de horarios o recursos |
+| **422** | Unprocessable Entity | Error de validación |
+| **429** | Too Many Requests | Rate limit excedido |
+| **500** | Internal Server Error | Error interno del servidor |
+| **502** | Bad Gateway | Error de integración externa |
+| **503** | Service Unavailable | Servicio temporalmente no disponible |
+
+---
+
+## 🔧 Rate Limits
+
+| Endpoint | Límite | Ventana | Scope |
+|----------|--------|---------|--------|
+| `/api/auth/*` | 10 requests | 15 minutos | IP |
+| `/api/meetings` | 100 requests | 1 hora | Usuario |
+| `/api/availability/*` | 1000 requests | 1 hora | IP |
+| `/api/integrations/*` | 20 requests | 15 minutos | Usuario |
+| **Global** | 1000 requests | 1 hora | Usuario |
+
+---
+
+## 🌐 Headers Importantes
+
+### **Request Headers**
+```http
+Content-Type: application/json
+Authorization: Bearer <jwt_token>
+X-Timezone: America/Mexico_City
+X-Client-Version: 3.0.0
+User-Agent: Cal-Frontend/3.0.0
+```
+
+### **Response Headers**
+```http
+Content-Type: application/json; charset=utf-8
+X-API-Version: 3.0.0
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1687788000
+X-Response-Time: 123ms
+```
+
+---
+
+## 🎯 Ejemplos de Integración
+
+### **JavaScript/Fetch**
+```javascript
+// Crear reunión Zoom + Outlook
+const response = await fetch('/api/meetings/zoom-outlook', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+    'X-Timezone': 'America/Mexico_City'
+  },
+  body: JSON.stringify({
+    eventTypeId: 'uuid-456',
+    attendee: {
+      name: 'María García',
+      email: 'maria@ejemplo.com'
+    },
+    startTime: '2025-06-23T15:00:00Z'
+  })
+});
+
+const meeting = await response.json();
+console.log('Reunión creada:', meeting.data.meeting.joinUrl);
+```
+
+### **cURL**
+```bash
+# Obtener disponibilidad
+curl -X GET "https://api.cal-backend-v3.com/api/availability/juan-perez/consulta-medica?from=2025-06-23&to=2025-06-30" \
+  -H "Content-Type: application/json"
+
+# Crear reunión
+curl -X POST "https://api.cal-backend-v3.com/api/meetings/zoom-outlook" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-jwt-token" \
+  -d '{
+    "eventTypeId": "uuid-456",
+    "attendee": {
+      "name": "María García", 
+      "email": "maria@ejemplo.com"
+    },
+    "startTime": "2025-06-23T15:00:00Z"
+  }'
+```
+
+---
+
+## 📝 Notas Importantes
+
+### **Zonas Horarias**
+- Todos los timestamps están en **UTC** (ISO 8601)
+- Use el header `X-Timezone` para especificar la zona horaria del cliente
+- Los slots de disponibilidad se convierten automáticamente
+
+### **Estrategias Disponibles**
+- `google-calendar-google-meet` - ✅ Completa
+- `zoom-outlook-calendar` - ✅ Completa  
+- `teams-outlook-calendar` - 🚧 En desarrollo
+
+### **Limitaciones Actuales**
+- Máximo 10 attendees por reunión
+- Eventos máximo 8 horas de duración
+- 50 event types por usuario
+- Sincronización de calendarios cada 15 minutos
+
+---
+
+## 🔗 Enlaces Útiles
+
+- [📖 Guía de Inicio Rápido](/docs/SETUP.md)
+- [🏗️ Documentación de Arquitectura](/docs/ARCHITECTURE.md)
+- [📋 Registro de Cambios](/docs/CHANGELOG.md)
+- [🤝 Guía de Contribución](/docs/CONTRIBUTING.md)
+- [⚡ Postman Collection](https://documenter.getpostman.com/cal-backend-v3)
+
+---
+
+**🎯 API Version:** 3.0.0  
+**📅 Última actualización:** Junio 22, 2025  
+**🔄 Rate Limits:** Aplicados a todos los endpoints  
+**🔐 Autenticación:** JWT requerida para endpoints protegidos
+
+---
+
+> 💡 **¿Preguntas?** Abre un issue en [GitHub](https://github.com/gbandala/cal-backend-v3/issues) o consulta la documentación completa.

@@ -1,0 +1,1876 @@
+{
+  "info": {
+    "name": "Cal Backend v3.0 - Complete API Collection",
+    "description": "Colección completa para Cal Backend v3.0 con escenarios end-to-end, testing y debugging.\n\n🎯 **Escenarios Incluidos:**\n- Google Calendar + Google Meet\n- Google Calendar + Zoom\n- Outlook + Zoom\n- Debug & Testing tools\n\n📋 **Antes de usar:**\n1. Configura las variables de entorno\n2. Ejecuta el flow de autenticación\n3. Conecta las integraciones necesarias\n4. Ejecuta los escenarios end-to-end\n\n🔧 **Variables requeridas:**\n- `base_url`: URL del API (ej: http://localhost:8000)\n- `admin_email`: Email de usuario admin\n- `admin_password`: Password del admin\n- `test_attendee_email`: Email para testing\n- `test_attendee_name`: Nombre para testing",
+    "version": "3.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "event_type_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "meeting_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has required fields\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data.user).to.have.property('id');",
+                  "    pm.expect(responseJson.data.user).to.have.property('username');",
+                  "    pm.expect(responseJson.data).to.have.property('token');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('jwt_token', responseJson.data.token);",
+                  "    pm.collectionVariables.set('user_id', responseJson.data.user.id);",
+                  "    console.log('✅ User registered and token saved');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User Cal v3\",\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\",\n  \"timezone\": \"America/Mexico_City\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Login successful\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('token');",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('jwt_token', responseJson.data.token);",
+                  "    pm.collectionVariables.set('user_id', responseJson.data.user.id);",
+                  "    console.log('✅ Login successful, token updated');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('jwt_token', responseJson.data.token);",
+                  "    console.log('✅ Token refreshed successfully');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 User Management",
+      "item": [
+        {
+          "name": "Get User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile has integrations info\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('integrations');",
+                  "    console.log('🔗 Integrations status:', JSON.stringify(responseJson.data.integrations, null, 2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "profile"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile updated\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User Cal v3 Updated\",\n  \"timezone\": \"America/Mexico_City\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "profile"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔗 Integrations Management",
+      "item": [
+        {
+          "name": "List All Integrations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Shows available strategies\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('strategies');",
+                  "    console.log('🎯 Available strategies:', responseJson.data.strategies.map(s => s.name));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/integrations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "integrations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Connect Google OAuth - Get Auth URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns auth URL\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('authUrl');",
+                  "    console.log('🔗 Google Auth URL:', responseJson.data.authUrl);",
+                  "    console.log('⚠️  Manual step required: Visit the URL above to complete OAuth');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/integrations/google/connect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "integrations",
+                "google",
+                "connect"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Connect Outlook OAuth - Get Auth URL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns auth URL\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('authUrl');",
+                  "    console.log('🔗 Outlook Auth URL:', responseJson.data.authUrl);",
+                  "    console.log('⚠️  Manual step required: Visit the URL above to complete OAuth');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/integrations/outlook/connect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "integrations",
+                "outlook",
+                "connect"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Connect Zoom",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Zoom connected\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data.connected).to.be.true;",
+                  "    console.log('✅ Zoom integration connected');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKey\": \"{{zoom_api_key}}\",\n  \"apiSecret\": \"{{zoom_api_secret}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/integrations/zoom/connect",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "integrations",
+                "zoom",
+                "connect"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📅 Event Types Management",
+      "item": [
+        {
+          "name": "List Event Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Returns event types list\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('eventTypes');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/event-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "event-types"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Event Type - Google Meet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Event type created\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('id');",
+                  "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-google-meet');",
+                  "    pm.collectionVariables.set('google_meet_event_type_id', responseJson.data.id);",
+                  "    console.log('✅ Google Meet event type created:', responseJson.data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Consulta Test - Google Meet\",\n  \"description\": \"Consulta de prueba usando Google Calendar + Google Meet\",\n  \"duration\": 30,\n  \"location\": {\n    \"type\": \"google-meet\",\n    \"calendar\": \"google\",\n    \"meeting\": \"google-meet\"\n  },\n  \"isPrivate\": false,\n  \"availability\": {\n    \"timezone\": \"America/Mexico_City\",\n    \"schedule\": [\n      {\n        \"day\": \"monday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"09:00\", \"end\": \"17:00\"}\n        ]\n      },\n      {\n        \"day\": \"tuesday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"09:00\", \"end\": \"17:00\"}\n        ]\n      },\n      {\n        \"day\": \"wednesday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"09:00\", \"end\": \"17:00\"}\n        ]\n      },\n      {\n        \"day\": \"thursday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"09:00\", \"end\": \"17:00\"}\n        ]\n      },\n      {\n        \"day\": \"friday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"09:00\", \"end\": \"17:00\"}\n        ]\n      }\n    ]\n  },\n  \"bufferTime\": {\n    \"before\": 15,\n    \"after\": 15\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/event-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "event-types"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Event Type - Zoom + Outlook",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Event type created\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('id');",
+                  "    pm.expect(responseJson.data.strategy).to.equal('zoom-outlook-calendar');",
+                  "    pm.collectionVariables.set('zoom_outlook_event_type_id', responseJson.data.id);",
+                  "    console.log('✅ Zoom + Outlook event type created:', responseJson.data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Consulta Test - Zoom + Outlook\",\n  \"description\": \"Consulta de prueba usando Zoom Meetings + Outlook Calendar\",\n  \"duration\": 45,\n  \"location\": {\n    \"type\": \"zoom-outlook\",\n    \"calendar\": \"outlook\",\n    \"meeting\": \"zoom\"\n  },\n  \"isPrivate\": false,\n  \"availability\": {\n    \"timezone\": \"America/Mexico_City\",\n    \"schedule\": [\n      {\n        \"day\": \"monday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"10:00\", \"end\": \"18:00\"}\n        ]\n      },\n      {\n        \"day\": \"tuesday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"10:00\", \"end\": \"18:00\"}\n        ]\n      },\n      {\n        \"day\": \"wednesday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"10:00\", \"end\": \"18:00\"}\n        ]\n      },\n      {\n        \"day\": \"thursday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"10:00\", \"end\": \"18:00\"}\n        ]\n      },\n      {\n        \"day\": \"friday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"10:00\", \"end\": \"16:00\"}\n        ]\n      }\n    ]\n  },\n  \"bufferTime\": {\n    \"before\": 15,\n    \"after\": 15\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/event-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "event-types"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Event Type - Google + Zoom",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Event type created\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.data).to.have.property('id');",
+                  "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-zoom');",
+                  "    pm.collectionVariables.set('google_zoom_event_type_id', responseJson.data.id);",
+                  "    console.log('✅ Google + Zoom event type created:', responseJson.data.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Consulta Test - Google + Zoom\",\n  \"description\": \"Consulta de prueba usando Google Calendar + Zoom Meetings\",\n  \"duration\": 60,\n  \"location\": {\n    \"type\": \"google-zoom\",\n    \"calendar\": \"google\",\n    \"meeting\": \"zoom\"\n  },\n  \"isPrivate\": false,\n  \"availability\": {\n    \"timezone\": \"America/Mexico_City\",\n    \"schedule\": [\n      {\n        \"day\": \"monday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"08:00\", \"end\": \"12:00\"},\n          {\"start\": \"14:00\", \"end\": \"18:00\"}\n        ]\n      },\n      {\n        \"day\": \"wednesday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"08:00\", \"end\": \"12:00\"},\n          {\"start\": \"14:00\", \"end\": \"18:00\"}\n        ]\n      },\n      {\n        \"day\": \"friday\",\n        \"enabled\": true,\n        \"slots\": [\n          {\"start\": \"08:00\", \"end\": \"12:00\"},\n          {\"start\": \"14:00\", \"end\": \"18:00\"}\n        ]\n      }\n    ]\n  },\n  \"bufferTime\": {\n    \"before\": 10,\n    \"after\": 10\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/event-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "event-types"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎯 Scenarios - End to End",
+      "item": [
+        {
+          "name": "📅 Google Calendar + Google Meet Flow",
+          "item": [
+            {
+              "name": "1. Check Availability",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "// Calculate dates for next 7 days",
+                      "const today = new Date();",
+                      "const nextWeek = new Date(today);",
+                      "nextWeek.setDate(today.getDate() + 7);",
+                      "",
+                      "const fromDate = today.toISOString().split('T')[0];",
+                      "const toDate = nextWeek.toISOString().split('T')[0];",
+                      "",
+                      "pm.collectionVariables.set('from_date', fromDate);",
+                      "pm.collectionVariables.set('to_date', toDate);",
+                      "",
+                      "console.log('📅 Checking availability from:', fromDate, 'to:', toDate);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Has availability slots\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data).to.have.property('availability');",
+                      "    const availableDays = responseJson.data.availability.filter(day => day.available && day.slots.some(slot => slot.available));",
+                      "    pm.expect(availableDays.length).to.be.at.least(1);",
+                      "    ",
+                      "    // Save first available slot",
+                      "    const firstAvailableDay = availableDays[0];",
+                      "    const firstAvailableSlot = firstAvailableDay.slots.find(slot => slot.available);",
+                      "    pm.collectionVariables.set('available_datetime', firstAvailableSlot.datetime);",
+                      "    ",
+                      "    console.log('✅ Found available slot:', firstAvailableSlot.datetime);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/availability/test-user-cal-v3/consulta-test-google-meet?from={{from_date}}&to={{to_date}}&timezone=America/Mexico_City",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "availability",
+                    "test-user-cal-v3",
+                    "consulta-test-google-meet"
+                  ],
+                  "query": [
+                    {
+                      "key": "from",
+                      "value": "{{from_date}}"
+                    },
+                    {
+                      "key": "to",
+                      "value": "{{to_date}}"
+                    },
+                    {
+                      "key": "timezone",
+                      "value": "America/Mexico_City"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "2. Create Google Meet Meeting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "pm.test(\"Google Meet meeting created\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-google-meet');",
+                      "    pm.expect(responseJson.data.meeting.provider).to.equal('google-meet');",
+                      "    pm.expect(responseJson.data.calendarEvent.provider).to.equal('google');",
+                      "    pm.expect(responseJson.data.meeting).to.have.property('joinUrl');",
+                      "    ",
+                      "    pm.collectionVariables.set('google_meet_meeting_id', responseJson.data.id);",
+                      "    ",
+                      "    console.log('✅ Google Meet created:');",
+                      "    console.log('   🔗 Join URL:', responseJson.data.meeting.joinUrl);",
+                      "    console.log('   📅 Calendar Event:', responseJson.data.calendarEvent.eventId);",
+                      "    console.log('   ⏱️  Execution Time:', responseJson.data.executionTime);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventTypeId\": \"{{google_meet_event_type_id}}\",\n  \"attendee\": {\n    \"name\": \"{{test_attendee_name}}\",\n    \"email\": \"{{test_attendee_email}}\",\n    \"timezone\": \"America/Mexico_City\"\n  },\n  \"startTime\": \"{{available_datetime}}\",\n  \"notes\": \"Test meeting created via Postman - Google Meet scenario\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/google-meet",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "google-meet"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "3. Get Meeting Details",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Meeting details complete\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-google-meet');",
+                      "    pm.expect(responseJson.data.status).to.equal('scheduled');",
+                      "    console.log('📋 Meeting Status:', responseJson.data.status);",
+                      "    console.log('👥 Attendees:', responseJson.data.attendees.length);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/{{google_meet_meeting_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "{{google_meet_meeting_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "4. Cancel Meeting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Meeting canceled successfully\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.status).to.equal('canceled');",
+                      "    pm.expect(responseJson.data.actions.attendeesNotified).to.be.true;",
+                      "    console.log('✅ Google Meet scenario completed - Meeting canceled');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/{{google_meet_meeting_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "{{google_meet_meeting_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "🎥 Zoom + Outlook Calendar Flow",
+          "item": [
+            {
+              "name": "1. Check Availability",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "// Calculate dates for next 7 days",
+                      "const today = new Date();",
+                      "const nextWeek = new Date(today);",
+                      "nextWeek.setDate(today.getDate() + 7);",
+                      "",
+                      "const fromDate = today.toISOString().split('T')[0];",
+                      "const toDate = nextWeek.toISOString().split('T')[0];",
+                      "",
+                      "pm.collectionVariables.set('from_date', fromDate);",
+                      "pm.collectionVariables.set('to_date', toDate);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Has availability slots\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    const availableDays = responseJson.data.availability.filter(day => day.available && day.slots.some(slot => slot.available));",
+                      "    pm.expect(availableDays.length).to.be.at.least(1);",
+                      "    ",
+                      "    // Save first available slot",
+                      "    const firstAvailableDay = availableDays[0];",
+                      "    const firstAvailableSlot = firstAvailableDay.slots.find(slot => slot.available);",
+                      "    pm.collectionVariables.set('available_datetime_zoom', firstAvailableSlot.datetime);",
+                      "    ",
+                      "    console.log('✅ Found available slot for Zoom+Outlook:', firstAvailableSlot.datetime);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/availability/test-user-cal-v3/consulta-test-zoom-outlook?from={{from_date}}&to={{to_date}}&timezone=America/Mexico_City",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "availability",
+                    "test-user-cal-v3",
+                    "consulta-test-zoom-outlook"
+                  ],
+                  "query": [
+                    {
+                      "key": "from",
+                      "value": "{{from_date}}"
+                    },
+                    {
+                      "key": "to",
+                      "value": "{{to_date}}"
+                    },
+                    {
+                      "key": "timezone",
+                      "value": "America/Mexico_City"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "2. Create Zoom + Outlook Meeting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "pm.test(\"Zoom + Outlook meeting created\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.strategy).to.equal('zoom-outlook-calendar');",
+                      "    pm.expect(responseJson.data.meeting.provider).to.equal('zoom');",
+                      "    pm.expect(responseJson.data.calendarEvent.provider).to.equal('outlook');",
+                      "    pm.expect(responseJson.data.meeting).to.have.property('joinUrl');",
+                      "    pm.expect(responseJson.data.meeting).to.have.property('password');",
+                      "    ",
+                      "    pm.collectionVariables.set('zoom_outlook_meeting_id', responseJson.data.id);",
+                      "    ",
+                      "    console.log('✅ Zoom + Outlook meeting created:');",
+                      "    console.log('   🎥 Zoom Join URL:', responseJson.data.meeting.joinUrl);",
+                      "    console.log('   🔑 Zoom Password:', responseJson.data.meeting.password);",
+                      "    console.log('   📅 Outlook Event:', responseJson.data.calendarEvent.eventId);",
+                      "    console.log('   ⏱️  Execution Time:', responseJson.data.executionTime);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventTypeId\": \"{{zoom_outlook_event_type_id}}\",\n  \"attendee\": {\n    \"name\": \"{{test_attendee_name}}\",\n    \"email\": \"{{test_attendee_email}}\",\n    \"timezone\": \"America/Mexico_City\"\n  },\n  \"startTime\": \"{{available_datetime_zoom}}\",\n  \"notes\": \"Test meeting created via Postman - Zoom + Outlook scenario\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/zoom-outlook",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "zoom-outlook"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "3. Validate Meeting in Both Systems",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Meeting exists in both systems\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.meeting.provider).to.equal('zoom');",
+                      "    pm.expect(responseJson.data.calendarEvent.provider).to.equal('outlook');",
+                      "    pm.expect(responseJson.data.meeting).to.have.property('hostUrl');",
+                      "    pm.expect(responseJson.data.meeting.settings).to.have.property('waitingRoom');",
+                      "    ",
+                      "    console.log('📋 Meeting validated in both systems');",
+                      "    console.log('   🎯 Strategy:', responseJson.data.strategy);",
+                      "    console.log('   🏠 Host URL:', responseJson.data.meeting.hostUrl);",
+                      "    console.log('   🛡️  Waiting Room:', responseJson.data.meeting.settings.waitingRoom);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/{{zoom_outlook_meeting_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "{{zoom_outlook_meeting_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "4. Cancel Meeting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Meeting canceled in both systems\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.status).to.equal('canceled');",
+                      "    pm.expect(responseJson.data.actions.zoomMeetingDeleted).to.be.true;",
+                      "    pm.expect(responseJson.data.actions.outlookEventDeleted).to.be.true;",
+                      "    console.log('✅ Zoom + Outlook scenario completed - Meeting canceled from both systems');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/{{zoom_outlook_meeting_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "{{zoom_outlook_meeting_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "🎯 Google Calendar + Zoom Flow",
+          "item": [
+            {
+              "name": "1. Check Availability",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "exec": [
+                      "// Calculate dates for next 7 days",
+                      "const today = new Date();",
+                      "const nextWeek = new Date(today);",
+                      "nextWeek.setDate(today.getDate() + 7);",
+                      "",
+                      "const fromDate = today.toISOString().split('T')[0];",
+                      "const toDate = nextWeek.toISOString().split('T')[0];",
+                      "",
+                      "pm.collectionVariables.set('from_date', fromDate);",
+                      "pm.collectionVariables.set('to_date', toDate);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Has availability slots\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    const availableDays = responseJson.data.availability.filter(day => day.available && day.slots.some(slot => slot.available));",
+                      "    pm.expect(availableDays.length).to.be.at.least(1);",
+                      "    ",
+                      "    // Save first available slot",
+                      "    const firstAvailableDay = availableDays[0];",
+                      "    const firstAvailableSlot = firstAvailableDay.slots.find(slot => slot.available);",
+                      "    pm.collectionVariables.set('available_datetime_gzoom', firstAvailableSlot.datetime);",
+                      "    ",
+                      "    console.log('✅ Found available slot for Google+Zoom:', firstAvailableSlot.datetime);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/api/availability/test-user-cal-v3/consulta-test-google-zoom?from={{from_date}}&to={{to_date}}&timezone=America/Mexico_City",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "availability",
+                    "test-user-cal-v3",
+                    "consulta-test-google-zoom"
+                  ],
+                  "query": [
+                    {
+                      "key": "from",
+                      "value": "{{from_date}}"
+                    },
+                    {
+                      "key": "to",
+                      "value": "{{to_date}}"
+                    },
+                    {
+                      "key": "timezone",
+                      "value": "America/Mexico_City"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "2. Create Google + Zoom Meeting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 201\", function () {",
+                      "    pm.response.to.have.status(201);",
+                      "});",
+                      "",
+                      "pm.test(\"Google + Zoom meeting created\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-zoom');",
+                      "    pm.expect(responseJson.data.meeting.provider).to.equal('zoom');",
+                      "    pm.expect(responseJson.data.calendarEvent.provider).to.equal('google');",
+                      "    pm.expect(responseJson.data.meeting).to.have.property('joinUrl');",
+                      "    pm.expect(responseJson.data.meeting).to.have.property('dialIn');",
+                      "    ",
+                      "    pm.collectionVariables.set('google_zoom_meeting_id', responseJson.data.id);",
+                      "    ",
+                      "    console.log('✅ Google Calendar + Zoom meeting created:');",
+                      "    console.log('   🎥 Zoom Join URL:', responseJson.data.meeting.joinUrl);",
+                      "    console.log('   📞 Dial-in:', responseJson.data.meeting.dialIn);",
+                      "    console.log('   📅 Google Event:', responseJson.data.calendarEvent.eventId);",
+                      "    console.log('   ⏱️  Execution Time:', responseJson.data.executionTime);",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventTypeId\": \"{{google_zoom_event_type_id}}\",\n  \"attendee\": {\n    \"name\": \"{{test_attendee_name}}\",\n    \"email\": \"{{test_attendee_email}}\",\n    \"timezone\": \"America/Mexico_City\"\n  },\n  \"startTime\": \"{{available_datetime_gzoom}}\",\n  \"notes\": \"Test meeting created via Postman - Google Calendar + Zoom scenario\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/google-zoom",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "google-zoom"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "3. Verify Hybrid Integration",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Hybrid integration working\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-zoom');",
+                      "    pm.expect(responseJson.data.meeting.provider).to.equal('zoom');",
+                      "    pm.expect(responseJson.data.calendarEvent.provider).to.equal('google');",
+                      "    pm.expect(responseJson.data.calendarEvent).to.have.property('htmlLink');",
+                      "    ",
+                      "    console.log('📋 Hybrid integration validated:');",
+                      "    console.log('   📅 Google Calendar Event URL:', responseJson.data.calendarEvent.htmlLink);",
+                      "    console.log('   🎥 Zoom Meeting in Calendar description');",
+                      "    console.log('   🔄 Two different providers working together');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/{{google_zoom_meeting_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "{{google_zoom_meeting_id}}"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "4. Cancel Hybrid Meeting",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status code is 200\", function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test(\"Hybrid meeting canceled correctly\", function () {",
+                      "    const responseJson = pm.response.json();",
+                      "    pm.expect(responseJson.data.status).to.equal('canceled');",
+                      "    pm.expect(responseJson.data.strategy).to.equal('google-calendar-zoom');",
+                      "    console.log('✅ Google Calendar + Zoom scenario completed - Hybrid meeting canceled');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{jwt_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/meetings/{{google_zoom_meeting_id}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "meetings",
+                    "{{google_zoom_meeting_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "🔍 Debug & Testing",
+      "item": [
+        {
+          "name": "Debug - Strategy Factory",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"All strategies available\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    const availableStrategies = responseJson.data.strategies.filter(s => s.available);",
+                  "    console.log('🎯 Available Strategies:');",
+                  "    availableStrategies.forEach(strategy => {",
+                  "        console.log(`   ✅ ${strategy.name}: ${strategy.description}`);",
+                  "    });",
+                  "    ",
+                  "    const unavailableStrategies = responseJson.data.strategies.filter(s => !s.available);",
+                  "    if (unavailableStrategies.length > 0) {",
+                  "        console.log('❌ Unavailable Strategies:');",
+                  "        unavailableStrategies.forEach(strategy => {",
+                  "            console.log(`   ❌ ${strategy.name}: ${strategy.reason}`);",
+                  "        });",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/integrations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "integrations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Debug - Provider Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Provider health status\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    console.log('🏥 Provider Health Status:');",
+                  "    responseJson.data.providers.forEach(provider => {",
+                  "        const status = provider.status === 'healthy' ? '✅' : '⚠️';",
+                  "        console.log(`   ${status} ${provider.name}: ${provider.status} (${provider.latency})`);",
+                  "        if (provider.errors24h > 0) {",
+                  "            console.log(`      ⚠️  Errors in 24h: ${provider.errors24h}`);",
+                  "        }",
+                  "    });",
+                  "    ",
+                  "    console.log('\\n🎯 Strategy Availability:');",
+                  "    responseJson.data.strategies.forEach(strategy => {",
+                  "        const status = strategy.available ? '✅' : '❌';",
+                  "        console.log(`   ${status} ${strategy.name}: ${strategy.avgExecutionTime || strategy.reason}`);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health/providers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "health",
+                "providers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Debug - System Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"System health check\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    console.log('🏥 System Health Report:');",
+                  "    console.log(`   📊 Status: ${responseJson.data.status}`);",
+                  "    console.log(`   📈 Version: ${responseJson.data.version}`);",
+                  "    console.log(`   ⏰ Uptime: ${responseJson.data.uptime}`);",
+                  "    console.log(`   💾 Database: ${responseJson.data.database.status} (${responseJson.data.database.latency})`);",
+                  "    console.log(`   🔧 Services: ${responseJson.data.services.healthy}/${responseJson.data.services.total} healthy`);",
+                  "    ",
+                  "    if (responseJson.data.services.degraded > 0) {",
+                  "        console.log(`   ⚠️  Degraded services: ${responseJson.data.services.degraded}`);",
+                  "    }",
+                  "    if (responseJson.data.services.down > 0) {",
+                  "        console.log(`   ❌ Down services: ${responseJson.data.services.down}`);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Test - Multiple Availability Check",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate multiple time slots for testing",
+                  "const now = new Date();",
+                  "const timeSlots = [];",
+                  "",
+                  "for (let i = 1; i <= 5; i++) {",
+                  "    const slotDate = new Date(now);",
+                  "    slotDate.setDate(now.getDate() + i);",
+                  "    slotDate.setHours(10 + i, 0, 0, 0);",
+                  "    ",
+                  "    const endDate = new Date(slotDate);",
+                  "    endDate.setMinutes(slotDate.getMinutes() + 30);",
+                  "    ",
+                  "    timeSlots.push({",
+                  "        start: slotDate.toISOString(),",
+                  "        end: endDate.toISOString()",
+                  "    });",
+                  "}",
+                  "",
+                  "pm.collectionVariables.set('test_time_slots', JSON.stringify(timeSlots));",
+                  "console.log('🕐 Generated test time slots:', timeSlots.length);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Availability check results\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    console.log('📋 Availability Check Results:');",
+                  "    responseJson.data.results.forEach((result, index) => {",
+                  "        const status = result.available ? '✅' : '❌';",
+                  "        const time = new Date(result.start).toLocaleString();",
+                  "        console.log(`   ${status} Slot ${index + 1}: ${time} - ${result.available ? 'Available' : result.reason}`);",
+                  "    });",
+                  "    ",
+                  "    const availableCount = responseJson.data.results.filter(r => r.available).length;",
+                  "    const totalCount = responseJson.data.results.length;",
+                  "    console.log(`\\n📊 Summary: ${availableCount}/${totalCount} slots available`);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventTypeId\": \"{{google_meet_event_type_id}}\",\n  \"timeSlots\": {{test_time_slots}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/availability/check",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "availability",
+                "check"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Test - Invalid Meeting Creation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 or 422\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "});",
+                  "",
+                  "pm.test(\"Validation error handled correctly\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.expect(responseJson.success).to.be.false;",
+                  "    pm.expect(responseJson.error).to.have.property('code');",
+                  "    console.log('✅ Validation error properly handled:');",
+                  "    console.log(`   Error Code: ${responseJson.error.code}`);",
+                  "    console.log(`   Message: ${responseJson.error.message}`);",
+                  "    if (responseJson.error.details) {",
+                  "        console.log('   Details:', JSON.stringify(responseJson.error.details, null, 4));",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventTypeId\": \"invalid-event-type-id\",\n  \"attendee\": {\n    \"name\": \"\",\n    \"email\": \"invalid-email\",\n    \"timezone\": \"Invalid/Timezone\"\n  },\n  \"startTime\": \"2020-01-01T00:00:00Z\",\n  \"notes\": \"Test invalid data validation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/meetings/google-meet",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "meetings",
+                "google-meet"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Test - Rate Limiting",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// This will test rate limiting by making rapid requests",
+                  "console.log('🚦 Testing rate limiting - making rapid requests...');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Response handled correctly\", function () {",
+                  "    // Could be 200 (success) or 429 (rate limited)",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 429]);",
+                  "});",
+                  "",
+                  "pm.test(\"Rate limit headers present\", function () {",
+                  "    pm.expect(pm.response.headers.get('X-RateLimit-Limit')).to.exist;",
+                  "    pm.expect(pm.response.headers.get('X-RateLimit-Remaining')).to.exist;",
+                  "    ",
+                  "    const limit = pm.response.headers.get('X-RateLimit-Limit');",
+                  "    const remaining = pm.response.headers.get('X-RateLimit-Remaining');",
+                  "    const responseTime = pm.response.headers.get('X-Response-Time');",
+                  "    ",
+                  "    console.log('🚦 Rate Limit Info:');",
+                  "    console.log(`   Limit: ${limit} requests`);",
+                  "    console.log(`   Remaining: ${remaining} requests`);",
+                  "    console.log(`   Response Time: ${responseTime}`);",
+                  "    ",
+                  "    if (pm.response.code === 429) {",
+                  "        console.log('⚠️  Rate limit exceeded - this is expected behavior');",
+                  "        const retryAfter = pm.response.headers.get('Retry-After');",
+                  "        console.log(`   Retry after: ${retryAfter} seconds`);",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "profile"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Data Management",
+      "item": [
+        {
+          "name": "List All Meetings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Meetings list with strategy info\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    console.log('📋 All Meetings Summary:');",
+                  "    console.log(`   Total meetings: ${responseJson.data.pagination.total}`);",
+                  "    ",
+                  "    const strategies = {};",
+                  "    responseJson.data.meetings.forEach(meeting => {",
+                  "        const strategy = meeting.strategy;",
+                  "        strategies[strategy] = (strategies[strategy] || 0) + 1;",
+                  "    });",
+                  "    ",
+                  "    console.log('\\n📊 Meetings by Strategy:');",
+                  "    Object.entries(strategies).forEach(([strategy, count]) => {",
+                  "        console.log(`   🎯 ${strategy}: ${count} meetings`);",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/meetings?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "meetings"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sync Calendars",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Calendar sync results\", function () {",
+                  "    const responseJson = pm.response.json();",
+                  "    console.log('🔄 Calendar Sync Results:');",
+                  "    responseJson.data.synced.forEach(sync => {",
+                  "        console.log(`   📅 ${sync.provider}: ${sync.events} events synced in ${sync.duration}`);",
+                  "    });",
+                  "    console.log(`\\n📊 Total events synced: ${responseJson.data.totalEvents}`);",
+                  "    console.log(`🕐 Sync completed at: ${new Date(responseJson.data.syncedAt).toLocaleString()}`);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/calendars/sync",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "calendars",
+                "sync"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script",
+          "console.log('🚀 Cal Backend v3.0 API Request');",
+          "console.log('📊 Request:', pm.request.method, pm.request.url.toString());",
+          "",
+          "// Set common headers",
+          "if (pm.collectionVariables.get('jwt_token')) {",
+          "    pm.request.headers.add({",
+          "        key: 'X-Client-Version',",
+          "        value: '3.0.0'",
+          "    });",
+          "}",
+          "",
+          "// Set timezone header",
+          "pm.request.headers.add({",
+          "    key: 'X-Timezone',",
+          "    value: 'America/Mexico_City'",
+          "});"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global post-request script",
+          "const responseTime = pm.response.responseTime;",
+          "const statusCode = pm.response.code;",
+          "",
+          "console.log(`⏱️  Response time: ${responseTime}ms`);",
+          "console.log(`📊 Status: ${statusCode}`);",
+          "",
+          "// Log rate limit info if present",
+          "const rateLimit = pm.response.headers.get('X-RateLimit-Remaining');",
+          "if (rateLimit) {",
+          "    console.log(`🚦 Rate limit remaining: ${rateLimit}`);",
+          "}",
+          "",
+          "// Log API version",
+          "const apiVersion = pm.response.headers.get('X-API-Version');",
+          "if (apiVersion) {",
+          "    console.log(`🔖 API Version: ${apiVersion}`);",
+          "}",
+          "",
+          "console.log('─'.repeat(50));"
+        ]
+      }
+    }
+  ]
+}

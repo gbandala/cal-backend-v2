@@ -8,24 +8,10 @@ import {
   UpdateDateColumn,
 } from "typeorm";
 import { User } from "./user.entity";
+import { IntegrationAppTypeEnum } from "../../enums/integration.enum";
+import { IntegrationProviderEnum } from "../../enums/integration.enum";
+import { IntegrationCategoryEnum } from "../../enums/integration.enum";
 
-export enum IntegrationProviderEnum {
-  GOOGLE = "GOOGLE",
-  ZOOM = "ZOOM",
-  MICROSOFT = "MICROSOFT",
-}
-
-export enum IntegrationAppTypeEnum {
-  GOOGLE_MEET_AND_CALENDAR = "GOOGLE_MEET_AND_CALENDAR",
-  ZOOM_MEETING = "ZOOM_MEETING",
-  OUTLOOK_CALENDAR = "OUTLOOK_CALENDAR",
-}
-
-export enum IntegrationCategoryEnum {
-  CALENDAR_AND_VIDEO_CONFERENCING = "CALENDAR_AND_VIDEO_CONFERENCING",
-  VIDEO_CONFERENCING = "VIDEO_CONFERENCING",
-  CALENDAR = "CALENDAR",
-}
 
 interface GoogleMeetAndCalendarMetadata {
   scope: string;
@@ -88,6 +74,13 @@ export class Integration {
   })
   calendar_name?: string;
   // *** FIN NUEVOS CAMPOS ***
+
+  // Agregar campos nuevos
+  @Column({ nullable: true })
+  outlook_calendar_id?: string;
+
+  @Column({ nullable: true })
+  outlook_calendar_name?: string;
 
 
   @Column({ nullable: false })

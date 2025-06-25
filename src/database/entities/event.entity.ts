@@ -7,14 +7,10 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from "typeorm";
-import { IntegrationAppTypeEnum } from "./integration.entity";
+import { EventLocationEnumType } from "../../enums/EventLocationEnum";
 import { User } from "./user.entity";
 import { Meeting } from "./meeting.entity";
 
-export enum EventLocationEnumType {
-  GOOGLE_MEET_AND_CALENDAR = IntegrationAppTypeEnum.GOOGLE_MEET_AND_CALENDAR,
-  ZOOM_MEETING = IntegrationAppTypeEnum.ZOOM_MEETING,
-}
 
 @Entity({ name: "events" })
 export class Event {
@@ -40,22 +36,23 @@ export class Event {
   locationType: EventLocationEnumType;
 
   // ✅ CAMPO CALENDAR_ID CORREGIDO
-  @Column({ 
-    name: 'calendar_id', 
-    type: 'varchar', 
+  @Column({
+    name: 'calendar_id',
+    type: 'varchar',
     nullable: false,        // ✅ No nullable
     default: 'primary'      // ✅ Default value 
   })
   calendar_id: string;
 
   // ✅ CAMPO CALENDAR_NAME CORREGIDO  
-  @Column({ 
-    name: 'calendar_name', 
-    type: 'varchar', 
+  @Column({
+    name: 'calendar_name',
+    type: 'varchar',
     nullable: true          // ✅ Puede ser null
   })
   calendar_name?: string | null;
   // *** FIN NUEVOS CAMPOS ***
+
 
 
   @ManyToOne(() => User, (user) => user.events)

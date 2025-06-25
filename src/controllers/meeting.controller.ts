@@ -13,6 +13,20 @@ import {
 import { asyncHandlerAndValidation } from "../middlewares/withValidation.middleware";
 import { CreateMeetingDto, MeetingIdDTO } from "../database/dto/meeting.dto";
 
+
+interface ResponseMeta {
+  system: string;
+  duration: string;
+  timestamp: string;
+  debugInfo?: {
+    usedMigratedService: boolean;
+    eventLocationType?: string;
+    calendarAppType?: string;
+    hasZoomMeetingId?: boolean;
+    hasCalendarEventId?: boolean;
+  };
+}
+
 export const getUserMeetingsController = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = req.user?.id as string;
@@ -29,7 +43,6 @@ export const getUserMeetingsController = asyncHandler(
   }
 );
 
-// For Public
 export const createMeetBookingForGuestController = asyncHandlerAndValidation(
   CreateMeetingDto,
   "body",
